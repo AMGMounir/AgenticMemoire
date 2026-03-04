@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Assistant intelligent de rédaction de mémoire - Système multi-agents avec IA">
+  <title>MémoireAI — Assistant de Rédaction</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+  <!-- Sidebar Navigation -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+      </div>
+      <span class="brand-text">MémoireAI</span>
+    </div>
+
+    <ul class="nav-links">
+      <li>
+        <a href="#" class="nav-link active" data-section="dashboard" id="nav-dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          <span>Tableau de bord</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-link" data-section="mindmap" id="nav-mindmap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="4" cy="6" r="2" />
+            <circle cx="20" cy="6" r="2" />
+            <circle cx="4" cy="18" r="2" />
+            <circle cx="20" cy="18" r="2" />
+            <line x1="9.5" y1="10" x2="5.5" y2="7.5" />
+            <line x1="14.5" y1="10" x2="18.5" y2="7.5" />
+            <line x1="9.5" y1="14" x2="5.5" y2="16.5" />
+            <line x1="14.5" y1="14" x2="18.5" y2="16.5" />
+          </svg>
+          <span>Mindmap</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-link" data-section="sources" id="nav-sources">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            <line x1="8" y1="7" x2="16" y2="7" />
+            <line x1="8" y1="11" x2="14" y2="11" />
+          </svg>
+          <span>Sources</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-link" data-section="memoir" id="nav-memoir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+          </svg>
+          <span>Mémoire</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-link" data-section="agents" id="nav-agents">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <span>Agents</span>
+        </a>
+      </li>
+    </ul>
+
+    <!-- User Profile (bottom of sidebar) -->
+    <div class="sidebar-user" id="sidebarUser">
+      <div class="user-avatar-btn" id="userAvatarBtn">
+        <img src="" alt="" class="user-avatar" id="userAvatar">
+        <div class="user-info">
+          <span class="user-name" id="userName">Chargement...</span>
+          <span class="user-email" id="userEmail"></span>
+        </div>
+        <svg class="user-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+          height="16">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+      <div class="user-dropdown" id="userDropdown">
+        <button class="dropdown-item" id="openSettings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          Paramètres du compte
+        </button>
+        <button class="dropdown-item dropdown-danger" id="logoutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          Déconnexion
+        </button>
+      </div>
+    </div>
+
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+
+    <!-- DASHBOARD SECTION -->
+    <section class="content-section active" id="section-dashboard">
+      <div class="section-header">
+        <h1>Tableau de bord</h1>
+        <p class="section-subtitle">Vue d'ensemble de votre assistant de mémoire</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card" id="stat-sources">
+          <div class="stat-icon sources-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="sourceCount">0</span>
+            <span class="stat-label">Sources collectées</span>
+          </div>
+        </div>
+        <div class="stat-card" id="stat-relevance">
+          <div class="stat-icon relevance-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon
+                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="avgRelevance">—</span>
+            <span class="stat-label">Score moyen</span>
+          </div>
+        </div>
+        <div class="stat-card" id="stat-status">
+          <div class="stat-icon status-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="agentStatus">Inactif</span>
+            <span class="stat-label">Statut agents</span>
+          </div>
+        </div>
+        <div class="stat-card" id="stat-sections">
+          <div class="stat-icon sections-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value" id="sectionCount">0</span>
+            <span class="stat-label">Sections du mémoire</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header">
+            <h2>Processus itératif</h2>
+          </div>
+          <div class="card-body">
+            <div class="quick-steps">
+              <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                  <h3>Définissez votre sujet</h3>
+                  <p>Entrez un titre ou créez une mindmap avec Mermaid.js.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                  <h3>Lancez la recherche</h3>
+                  <p>L'agent de recherche effectue un scraping approfondi et les sources apparaissent en temps réel.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                  <h3>Gérez vos sources</h3>
+                  <p>Vérifiez, ajoutez ou supprimez des sources dans l'onglet Sources.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                  <h3>Lancez la synthèse</h3>
+                  <p>L'IA produit une synthèse académique et structure votre mémoire.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Activité récente</h2>
+          </div>
+          <div class="card-body">
+            <div class="activity-log" id="dashboardActivity">
+              <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                <p>Aucune activité pour l'instant.<br>Lancez la recherche pour commencer !</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MINDMAP SECTION -->
+    <section class="content-section" id="section-mindmap">
+      <div class="section-header">
+        <h1>Éditeur de Mindmap</h1>
+        <p class="section-subtitle">Définissez votre thématique avec un simple titre ou la syntaxe Mermaid.js</p>
+      </div>
+
+      <div class="card title-input-card">
+        <div class="card-header">
+          <h2>Démarrage rapide — Entrez un sujet</h2>
+        </div>
+        <div class="card-body">
+          <div class="title-input-row">
+            <input type="text" id="thesisTitle" class="title-input"
+              placeholder="Ex: Intelligence Artificielle et Éducation, Cybersécurité dans le Cloud...">
+            <button class="btn btn-primary" id="generateFromTitle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              Générer la mindmap
+            </button>
+          </div>
+          <p class="title-hint">Entrez le sujet de votre mémoire et une mindmap sera générée automatiquement via
+            DeepSeek.</p>
+        </div>
+      </div>
+
+      <div class="card research-settings-card">
+        <div class="card-header">
+          <h2>Paramètres de recherche</h2>
+        </div>
+        <div class="card-body">
+          <div class="settings-row">
+            <div class="setting-group">
+              <label for="relevanceThreshold">Seuil de pertinence minimum</label>
+              <div class="slider-row">
+                <input type="range" id="relevanceThreshold" min="0" max="100" value="30" class="range-slider">
+                <span class="slider-value" id="thresholdValue">30</span>
+              </div>
+              <p class="setting-hint">Seules les sources avec un score ≥ ce seuil seront conservées.</p>
+            </div>
+            <div class="setting-group">
+              <label for="depthLevel">Profondeur de recherche</label>
+              <select id="depthLevel" class="select-input">
+                <option value="2">Légère (2 requêtes/thème)</option>
+                <option value="4" selected>Normale (4 requêtes/thème)</option>
+                <option value="6">Approfondie (6 requêtes/thème)</option>
+                <option value="8">Maximale (8 requêtes/thème)</option>
+              </select>
+              <p class="setting-hint">Plus de requêtes = plus de sources mais recherche plus longue.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mindmap-layout">
+        <div class="card mindmap-editor-card">
+          <div class="card-header">
+            <h2>Code Mermaid</h2>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" id="loadExample">Exemple</button>
+              <button class="btn btn-primary btn-sm" id="renderMindmap">Visualiser</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <textarea id="mindmapInput" class="code-editor" spellcheck="false" placeholder="mindmap
+  root((Votre Thématique))
+    Axe 1
+      Sous-thème A
+      Sous-thème B
+    Axe 2
+      Sous-thème C
+      Sous-thème D"></textarea>
+          </div>
+        </div>
+
+        <div class="card mindmap-preview-card">
+          <div class="card-header">
+            <h2>Aperçu</h2>
+            <div class="card-actions">
+              <button class="btn btn-primary" id="launchResearch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                Lancer la recherche
+              </button>
+              <button class="btn btn-danger" id="stopProcess" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                Arrêter
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="mindmap-render" id="mindmapRender">
+              <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="4" cy="6" r="2" />
+                  <circle cx="20" cy="6" r="2" />
+                  <circle cx="4" cy="18" r="2" />
+                  <circle cx="20" cy="18" r="2" />
+                </svg>
+                <p>Entrez votre mindmap et cliquez sur "Visualiser"</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="parsedNodesCard" style="display:none;">
+        <div class="card-header">
+          <h2>Nœuds extraits</h2>
+        </div>
+        <div class="card-body">
+          <div class="nodes-list" id="parsedNodesList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SOURCES SECTION -->
+    <section class="content-section" id="section-sources">
+      <div class="section-header">
+        <div class="section-header-row">
+          <div>
+            <h1 id="sourcesTitle">Sources Collectées</h1>
+            <p class="section-subtitle" id="sourcesSubtitle">Sélectionnez un projet pour voir ses sources et lancer la
+              synthèse</p>
+          </div>
+          <button class="btn btn-primary" id="launchSynthesis" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Lancer la synthèse
+          </button>
+        </div>
+      </div>
+
+      <!-- Back to folders breadcrumb (visible only when inside a folder) -->
+      <div class="folder-breadcrumb" id="folderBreadcrumb" style="display:none;">
+        <button class="btn btn-ghost" id="backToFolders">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Retour aux projets
+        </button>
+        <span class="breadcrumb-project-name" id="breadcrumbProjectName"></span>
+      </div>
+
+      <!-- Add source form (visible only when inside a folder) -->
+      <div class="card add-source-card" id="addSourceCard" style="display:none;">
+        <div class="card-header">
+          <h2>Ajouter une source manuellement</h2>
+        </div>
+        <div class="card-body">
+          <div class="add-source-form">
+            <input type="text" id="addSourceTitle" class="title-input" placeholder="Titre de la source">
+            <input type="url" id="addSourceUrl" class="title-input" placeholder="URL (optionnel)">
+            <textarea id="addSourceContent" class="add-source-textarea" placeholder="Contenu / résumé de la source..."
+              rows="3"></textarea>
+            <button class="btn btn-secondary" id="addSourceBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Ajouter la source
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search/Sort toolbar (visible only when inside a folder) -->
+      <div class="sources-toolbar" id="sourcesToolbar" style="display:none;">
+        <div class="sources-filter-row">
+          <div class="search-bar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" id="sourceSearch" placeholder="Rechercher dans les sources...">
+          </div>
+          <div class="toolbar-actions">
+            <select id="sourceSort" class="select-input">
+              <option value="relevance">Trier par pertinence</option>
+              <option value="date">Trier par date</option>
+              <option value="title">Trier par titre</option>
+            </select>
+            <button class="btn btn-secondary" id="refreshSources">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Actualiser
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROJECT FOLDERS GRID (default view) -->
+      <div class="project-folders-grid" id="projectFoldersGrid">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          <p>Aucun projet trouvé.<br>Lancez la recherche depuis la section Mindmap.</p>
+        </div>
+      </div>
+
+      <!-- SOURCES LIST (visible when a folder is open) -->
+      <div class="sources-grid" id="sourcesList" style="display:none;">
+      </div>
+    </section>
+
+    <!-- MEMOIR SECTION -->
+    <section class="content-section" id="section-memoir">
+      <div class="section-header">
+        <div class="section-header-row">
+          <div>
+            <h1 id="memoirTitle">Mémoires Générés</h1>
+            <p class="section-subtitle" id="memoirSubtitle">Sélectionnez un projet pour consulter son mémoire</p>
+          </div>
+          <button class="btn btn-primary" id="downloadMemoir" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Télécharger le mémoire (PDF)
+          </button>
+        </div>
+      </div>
+
+      <!-- Breadcrumb for memoir folder -->
+      <div id="memoirBreadcrumb" class="folder-breadcrumb" style="display:none;">
+        <button class="btn btn-ghost" id="backToMemoirFolders">← Retour aux projets</button>
+        <span id="memoirBreadcrumbProjectName"></span>
+      </div>
+
+      <!-- Project folders grid for memoirs -->
+      <div class="project-folders-grid" id="memoirFoldersGrid">
+      </div>
+
+      <!-- Memoir content (shown when folder is open) -->
+      <div id="memoirContent" style="display:none;">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <p>La structure du mémoire sera générée après la synthèse.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGENTS SECTION -->
+    <section class="content-section" id="section-agents">
+      <div class="section-header">
+        <h1>Agents</h1>
+        <p class="section-subtitle">Suivi de l'exécution du système multi-agents</p>
+      </div>
+
+      <div class="agents-pipeline">
+        <div class="pipeline-step" id="pipeline-research">
+          <div class="pipeline-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          <div class="pipeline-info">
+            <h3>Agent de Recherche</h3>
+            <p>Scraping approfondi et analyse IA des sources</p>
+          </div>
+          <div class="pipeline-status">
+            <span class="status-badge idle">En attente</span>
+            <button class="stop-round-btn" title="Arrêter" style="display:none;" onclick="stopProcess()">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <div class="pipeline-step" id="pipeline-synthesis">
+          <div class="pipeline-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <div class="pipeline-info">
+            <h3>Agent de Synthèse</h3>
+            <p>Analyse thématique approfondie via DeepSeek</p>
+          </div>
+          <div class="pipeline-status">
+            <span class="status-badge idle">En attente</span>
+            <button class="stop-round-btn" title="Arrêter" style="display:none;" onclick="stopProcess()">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="pipeline-connector"></div>
+
+        <div class="pipeline-step" id="pipeline-structure">
+          <div class="pipeline-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+          </div>
+          <div class="pipeline-info">
+            <h3>Agent de Structuration</h3>
+            <p>Génération du plan de mémoire doctoral</p>
+          </div>
+          <div class="pipeline-status">
+            <span class="status-badge idle">En attente</span>
+            <button class="stop-round-btn" title="Arrêter" style="display:none;" onclick="stopProcess()">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Journal d'activité</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary btn-sm" id="clearLogs">Effacer</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="log-container" id="agentLogs">
+            <div class="empty-state small">
+              <p>Les logs des agents apparaîtront ici lors de l'exécution.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Account Settings Modal -->
+  <div class="modal-overlay" id="settingsModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Paramètres du compte</h2>
+        <button class="modal-close" id="closeSettings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-avatar-section">
+          <img src="" alt="" class="settings-avatar" id="settingsAvatar">
+          <div class="settings-avatar-actions">
+            <input type="file" id="settingsPhotoFile" accept="image/jpeg,image/png,image/gif,image/webp"
+              style="display:none;">
+            <button type="button" class="btn btn-secondary btn-sm" id="uploadAvatarBtn">Changer la photo</button>
+            <p style="font-size:11px; color:#5e5a66; margin-top:6px;">JPG, PNG, GIF, WEBP — max 5 Mo</p>
+          </div>
+        </div>
+        <div class="settings-field">
+          <label for="settingsUsername">Nom d'utilisateur</label>
+          <input type="text" id="settingsUsername" class="input-field" placeholder="Votre nom">
+        </div>
+        <div class="settings-field">
+          <label>Email</label>
+          <input type="text" id="settingsEmail" class="input-field" disabled>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="saveSettings">Enregistrer les modifications</button>
+        </div>
+        <div class="settings-danger-zone">
+          <h3>Zone dangereuse</h3>
+          <p>La suppression de votre compte est irréversible.</p>
+          <button class="btn btn-danger" id="deleteAccountBtn">Supprimer mon compte</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/app.js?v=4"></script>
+</body>
+
+</html>

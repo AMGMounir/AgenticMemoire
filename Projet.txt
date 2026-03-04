@@ -1,0 +1,58 @@
+<<<<<<< HEAD
+Mon assistant de rédaction de mémoire
+Contexte
+Dans le cadre de votre mémoire de fin d'année universitaire, vous devez rédiger un dossier d'ingénierie orienté recherche sur une problématique métier qui vous intéresse.
+Malheureusement, vous allez certainement vous y prendre au dernier moment et rater les bénéfices de cette recherche pour optimiser votre premier pas dans votre carrière
+d'informaticien. Les IA Génératives sont là pour vous aider, mais aussi pour vous piéger et ainsi vous rendre intellectuellement paresseux. Le projet est là pour vous aider à structurer votre mémoire.
+Pour rappel, le déroulement de rédaction d'un mémoire se fait généralement selon les étapes suivantes :
+1. Définition de votre thématique, puis d'un axe de travail.
+2. Recherche bibliographique afin de faire émerger une problématique.
+3. Réalisation d'un état de l'art associé à cette problématique.
+4. Proposition d'une solution innovante en s'appuyant sur l'état de l'art.
+5. Critique (positive et négative) de la solution, souvent via son application à un cas concret.
+Objectifs du projet
+L'objectif de ce projet est de concevoir et développer un assistant logiciel intelligent qui guide et automatise partiellement le processus de rédaction de votre mémoire de Master
+2. Plus spécifiquement, vous devrez :
+● Déclenchement du processus de mémoire : À partir d'une mindmap (utiliser le format de description de mermaid.js :
+https://mermaid.js.org/syntax/mindmap.html) définissant la thématique et l'axe de travail, enclencher automatiquement le processus de recherche et de structuration du mémoire.
+● Collecte et gestion de l'information : Mettre en place un mécanisme de recueil d'information, potentiellement via une extension de navigateur, pour :
+○ Collecter les sources pertinentes.
+○ Synthétiser les informations clés de chaque source.
+○ Attribuer un indicateur de pertinence (score) pour chaque information par rapport aux nœuds de votre mindmap de départ.
+● Architecture logicielle : Trouver une architecture applicative et logicielle robuste et modulaire pour votre assistant (n'oubliez pas de considérer le Coût Total de Possession - TCO).
+
+Compétences à acquérir
+
+Création d'un système multi-agent Concevoir, développer et coordonner plusieurs agents logiciels pour accomplir les différentes étapes du processus de mémoire (ex : un agent pour la veille/recherche bibliographique, un agent pour la synthèse, un agent pour la structuration).
+Utilisation de l'IA Générative Intégrer et manipuler des modèles d'intelligence artificielle générative pour la synthèse de documents et la proposition de pistes de réflexion ou d'axes de développement de l'état de l'art.
+Modélisation des processus Utiliser des outils et des notations formelles.
+=======
+Mon assistant de rédaction de mémoire
+Contexte
+Dans le cadre de votre mémoire de fin d'année universitaire, vous devez rédiger un dossier d'ingénierie orienté recherche sur une problématique métier qui vous intéresse.
+Malheureusement, vous allez certainement vous y prendre au dernier moment et rater les bénéfices de cette recherche pour optimiser votre premier pas dans votre carrière
+d'informaticien. Les IA Génératives sont là pour vous aider, mais aussi pour vous piéger et ainsi vous rendre intellectuellement paresseux. Le projet est là pour vous aider à structurer votre mémoire.
+Pour rappel, le déroulement de rédaction d'un mémoire se fait généralement selon les étapes suivantes :
+1. Définition de votre thématique, puis d'un axe de travail.
+2. Recherche bibliographique afin de faire émerger une problématique.
+3. Réalisation d'un état de l'art associé à cette problématique.
+4. Proposition d'une solution innovante en s'appuyant sur l'état de l'art.
+5. Critique (positive et négative) de la solution, souvent via son application à un cas concret.
+Objectifs du projet
+L'objectif de ce projet est de concevoir et développer un assistant logiciel intelligent qui guide et automatise partiellement le processus de rédaction de votre mémoire de Master
+2. Plus spécifiquement, vous devrez :
+● Déclenchement du processus de mémoire : À partir d'une mindmap (utiliser le format de description de mermaid.js :
+https://mermaid.js.org/syntax/mindmap.html) définissant la thématique et l'axe de travail, enclencher automatiquement le processus de recherche et de structuration du mémoire.
+● Collecte et gestion de l'information : Mettre en place un mécanisme de recueil d'information, potentiellement via une extension de navigateur, pour :
+○ Collecter les sources pertinentes.
+○ Synthétiser les informations clés de chaque source.
+○ Attribuer un indicateur de pertinence (score) pour chaque information par rapport aux nœuds de votre mindmap de départ.
+● Architecture logicielle : Trouver une architecture applicative et logicielle robuste et modulaire pour votre assistant (n'oubliez pas de considérer le Coût Total de Possession - TCO).
+
+Compétences à acquérir
+
+Création d'un système multi-agent Concevoir, développer et coordonner plusieurs agents logiciels pour accomplir les différentes étapes du processus de mémoire (ex : un agent pour la veille/recherche bibliographique, un agent pour la synthèse, un agent pour la structuration).
+Utilisation de l'IA Générative Intégrer et manipuler des modèles d'intelligence artificielle générative pour la synthèse de documents et la proposition de pistes de réflexion ou d'axes de développement de l'état de l'art.
+Modélisation des processus Utiliser des outils et des notations formelles.
+>>>>>>> bd3b8f710204045058fa663319866f741df14205
+Manipulation des workflow d'automatisation Maîtriser les outils et techniques d'orchestration pour gérer les séquences de tâches automatisées au sein de l'agent (ex : scraping, classification, résumé, suivi de progression)
