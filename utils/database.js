@@ -27,8 +27,22 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL,
     password_hash TEXT,
     profile_picture TEXT DEFAULT '',
+    credits INTEGER DEFAULT 50,
+    is_premium INTEGER DEFAULT 0,
+    has_payment_method INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    credits_changed INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -56,6 +70,34 @@ CREATE TABLE IF NOT EXISTS sources (
     methodology TEXT DEFAULT '',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
+`);
+
+// Quick migration for existing databases
+const usersInfo = db.prepare("PRAGMA table_info(users)").all();
+const hasCredits = usersInfo.some(c => c.name === 'credits');
+if (!hasCredits) {
+    db.exec(`
+        ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 50;
+        ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0;
+    `);
+}
+const hasPmt = usersInfo.some(c => c.name === 'has_payment_method');
+if (!hasPmt) {
+    db.exec(`ALTER TABLE users ADD COLUMN has_payment_method INTEGER DEFAULT 0;`);
+}
+
+// Ensure transactions table exists for older databases
+db.exec(`
+    CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        credits_changed INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
 `);
 
 module.exports = db;

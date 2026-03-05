@@ -15,13 +15,31 @@ class UserStore {
             findByGoogleId: db.prepare('SELECT * FROM users WHERE google_id = ?'),
             findByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
             insert: db.prepare(`
-                INSERT INTO users (id, google_id, email, username, password_hash, profile_picture, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO users (id, google_id, email, username, password_hash, profile_picture, credits, is_premium, has_payment_method, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 50, 0, 0, ?, ?)
             `),
             updateProfile: db.prepare(`
                 UPDATE users SET username = ?, profile_picture = ?, updated_at = ? WHERE id = ?
             `),
-            deleteUser: db.prepare('DELETE FROM users WHERE id = ?')
+            updateCredits: db.prepare(`
+                UPDATE users SET credits = credits - ?, updated_at = ? WHERE id = ?
+            `),
+            addCredits: db.prepare(`
+                UPDATE users SET credits = credits + ?, updated_at = ? WHERE id = ?
+            `),
+            setPremium: db.prepare(`
+                UPDATE users SET is_premium = ?, updated_at = ? WHERE id = ?
+            `),
+            updatePaymentMethod: db.prepare(`
+                UPDATE users SET has_payment_method = ?, updated_at = ? WHERE id = ?
+            `),
+            deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
+
+            insertTransaction: db.prepare(`
+                INSERT INTO transactions (id, user_id, type, amount, credits_changed, description, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `),
+            getTransactions: db.prepare('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC')
         };
     }
 
@@ -80,6 +98,32 @@ class UserStore {
         const now = new Date().toISOString();
 
         this._stmts.updateProfile.run(username, profilePicture, now, userId);
+        return this.findById(userId);
+    }
+
+    deductCredits(userId, amount) {
+        const user = this.findById(userId);
+        if (!user || user.credits < amount) throw new Error('Crédits insuffisants');
+        const now = new Date().toISOString();
+        this._stmts.updateCredits.run(amount, now, userId);
+        return this.findById(userId);
+    }
+
+    addCredits(userId, amount) {
+        const now = new Date().toISOString();
+        this._stmts.addCredits.run(amount, now, userId);
+        return this.findById(userId);
+    }
+
+    setPremium(userId, isPremium) {
+        const now = new Date().toISOString();
+        this._stmts.setPremium.run(isPremium ? 1 : 0, now, userId);
+        return this.findById(userId);
+    }
+
+    updatePaymentMethod(userId, hasMethod) {
+        const now = new Date().toISOString();
+        this._stmts.updatePaymentMethod.run(hasMethod ? 1 : 0, now, userId);
         return this.findById(userId);
     }
 

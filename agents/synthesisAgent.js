@@ -10,9 +10,7 @@
  */
 
 const axios = require('axios');
-
-const SAMBANOVA_API_URL = 'https://api.sambanova.ai/v1/chat/completions';
-const MODEL = 'DeepSeek-V3.1-cb';
+const { callLLM } = require('../utils/apiClient');
 
 class SynthesisAgent {
     constructor() {
@@ -27,7 +25,7 @@ class SynthesisAgent {
         this.progress = 0;
         this._aborted = false;
 
-        if (!apiKey) {
+        if (!process.env.GEMINI_API_KEY) {
             onProgress && onProgress({ agent: this.name, step: 'Pas de clé API — synthèse démo', progress: 50 });
             const result = this._mockSynthesis(sources, mindmap);
             this.status = 'done';
@@ -218,8 +216,11 @@ class SynthesisAgent {
     async _deepThemeAnalysis(themeNode, sourceContext, apiKey) {
         const subTopics = (themeNode.children || []).map(c => c.label).join(', ');
 
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: `Theme analysis: ${themeNode.label}`,
+            maxTokens: 8000,
+            temperature: 0.25,
+            timeout: 120000,
             messages: [
                 { role: 'system', content: 'Tu es un chercheur doctoral produisant un état de l\'art de 800+ mots par thème. Tu écris en français académique soutenu avec des citations [Source X]. Réponds en JSON.' },
                 {
@@ -257,21 +258,19 @@ JSON:
   "reflectionPaths": ["piste 1", "piste 2", ...],
   "methodologies": ["méthode 1", "méthode 2"]
 }` }
-            ],
-            max_tokens: 8000,
-            temperature: 0.25
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 120000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ PASS 3: Content Expansion ============
     async _expandThemeContent(themeAnalysis, sourceContext, apiKey) {
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: `Content expansion: ${themeAnalysis.theme}`,
+            maxTokens: 8000,
+            temperature: 0.25,
+            timeout: 120000,
             messages: [
                 { role: 'system', content: 'Tu es un rédacteur académique de niveau doctoral. Tu produis des textes denses, analytiques et riches en citations. Écris en français académique soutenu. Réponds en JSON.' },
                 {
@@ -316,21 +315,19 @@ JSON:
   "additionalAnalysis": "400+ mots d'analyse critique supplémentaire...",
   "additionalKeyPoints": ["point 1 avec [Source X]", "point 2", ...]
 }` }
-            ],
-            max_tokens: 8000,
-            temperature: 0.25
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 120000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ PASS 2: Data Extraction ============
     async _extractDataAndFigures(themeAnalysis, sourceContext, apiKey) {
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: `Data extraction: ${themeAnalysis.theme}`,
+            maxTokens: 4000,
+            temperature: 0.3,
+            timeout: 60000,
             messages: [
                 { role: 'system', content: 'Tu extrais des données structurées pour un mémoire. Crée des tableaux, des figures et des statistiques. Réponds en JSON.' },
                 {
@@ -364,15 +361,10 @@ JSON:
   ],
   "comparativeData": "Paragraphe comparatif..."
 }` }
-            ],
-            max_tokens: 4000,
-            temperature: 0.3
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 60000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ PASS 3: Cross-Theme Synthesis ============
@@ -381,8 +373,11 @@ JSON:
             `Thème: ${t.theme}\nPoints clés: ${(t.keyPoints || []).join('; ')}\nMéthodos: ${(t.methodologies || []).join(', ')}`
         ).join('\n\n');
 
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: 'Cross-theme synthesis',
+            maxTokens: 4000,
+            temperature: 0.3,
+            timeout: 60000,
             messages: [
                 { role: 'system', content: 'Synthèse comparative inter-thèmes pour mémoire doctoral. Réponds en JSON.' },
                 {
@@ -403,15 +398,10 @@ JSON:
   "interconnections": ["lien inter-thème 1", "lien 2", ...],
   "tensions": ["tension identifiée 1", ...]
 }` }
-            ],
-            max_tokens: 4000,
-            temperature: 0.3
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 60000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ PASS 4: Global Meta-Analysis ============
@@ -420,8 +410,11 @@ JSON:
             `${t.theme}: ${(t.synthesis || '').substring(0, 400)}...\nCritique: ${(t.criticalAnalysis || '').substring(0, 200)}`
         ).join('\n\n');
 
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: 'Global meta-analysis',
+            maxTokens: 6000,
+            temperature: 0.25,
+            timeout: 90000,
             messages: [
                 { role: 'system', content: 'Tu es un directeur de thèse produisant une méta-analyse finale. Réponds en JSON.' },
                 {
@@ -448,15 +441,10 @@ JSON:
   "futureResearch": "200+ mots sur la recherche future...",
   "epistemologicalReflection": "150+ mots..."
 }` }
-            ],
-            max_tokens: 6000,
-            temperature: 0.25
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 90000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ PASS 5: Overview Tables ============
@@ -467,8 +455,11 @@ JSON:
 
         const themeList = themeAnalyses.map(t => t.theme).join(', ');
 
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const response = await callLLM({
+            label: 'Overview tables',
+            maxTokens: 4000,
+            temperature: 0.3,
+            timeout: 60000,
             messages: [
                 { role: 'system', content: 'Crée des tableaux récapitulatifs en markdown pour un mémoire. Réponds en JSON.' },
                 {
@@ -489,15 +480,10 @@ JSON:
   "methodologyTable": "| Source | Méthodologie | Type | Résultats |\\n|---|---|---|---|\\n...",
   "sourceMatrix": "| Source | Thème1 | Thème2 | ... |\\n|---|---|---|---|\\n..."
 }` }
-            ],
-            max_tokens: 4000,
-            temperature: 0.3
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 60000
+            ]
         });
 
-        return this._parseJSON(response.data.choices[0].message.content);
+        return this._parseJSON(response);
     }
 
     // ============ Helpers ============
@@ -555,7 +541,7 @@ JSON:
         return {
             themes,
             globalSummary: `Synthèse de ${sources.length} sources — clé API requise pour analyse complète.`,
-            gaps: ['Clé API requise'], contradictions: [], recommendations: ['Configurer SAMBANOVA_API_KEY ou TOGETHER_API_KEY dans .env'],
+            gaps: ['Clé API requise'], contradictions: [], recommendations: ['Configurer GEMINI_API_KEY dans .env'],
             futureResearch: '', epistemologicalReflection: '', crossAnalysis: '',
             interconnections: [], tensions: [], overviewTables: {}
         };

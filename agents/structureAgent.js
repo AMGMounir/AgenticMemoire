@@ -6,9 +6,7 @@
  */
 
 const axios = require('axios');
-
-const SAMBANOVA_API_URL = 'https://api.sambanova.ai/v1/chat/completions';
-const MODEL = 'DeepSeek-V3.1-cb';
+const { callLLM } = require('../utils/apiClient');
 
 class StructureAgent {
     constructor() {
@@ -21,7 +19,7 @@ class StructureAgent {
         this.status = 'running';
         this.progress = 0;
 
-        if (!apiKey) {
+        if (!process.env.GEMINI_API_KEY) {
             onProgress && onProgress({ agent: this.name, step: 'Mode démo — structure générique', progress: 50 });
             const result = this._mockStructure(synthesisData, mindmap, sources);
             this.status = 'done';
@@ -86,24 +84,22 @@ Réponds en JSON:
   "keyContributions": ["contribution 1", "contribution 2"]
 }`;
 
-            onProgress && onProgress({ agent: this.name, step: 'Attente de la réponse DeepSeek...', progress: 40 });
+            onProgress && onProgress({ agent: this.name, step: 'Attente de la réponse Gemini...', progress: 40 });
 
-            const response = await axios.post(SAMBANOVA_API_URL, {
-                model: MODEL,
+            const response = await callLLM({
+                label: 'Memoir structure',
+                maxTokens: 8000,
+                temperature: 0.3,
+                timeout: 90000,
                 messages: [
                     { role: 'system', content: 'Tu es un directeur de thèse expert en structuration académique. Tu produis des plans de mémoire rigoureux et détaillés. Réponds en JSON valide.' },
                     { role: 'user', content: prompt }
-                ],
-                max_tokens: 8000,
-                temperature: 0.3
-            }, {
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                timeout: 90000
+                ]
             });
 
             onProgress && onProgress({ agent: this.name, step: 'Traitement de la structure...', progress: 80 });
 
-            const content = response.data.choices[0].message.content;
+            const content = response;
             let structureData;
             try {
                 const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);

@@ -71,6 +71,55 @@ function loadUserProfile(user) {
             avatarEl.alt = initials;
         }
     }
+
+    // Credits UI
+    const badgeEl = document.getElementById('navCreditBadge');
+    if (badgeEl) badgeEl.textContent = `${user.credits !== undefined ? user.credits : 0} crédits`;
+
+    const billingCredits = document.getElementById('billingCurrentCredits');
+    if (billingCredits) billingCredits.textContent = user.credits !== undefined ? user.credits : '--';
+
+    const billingPlan = document.getElementById('billingCurrentPlan');
+    const subscribeBtn = document.getElementById('btnSubscribePremium');
+    const cancelBtn = document.getElementById('btnCancelPremium');
+
+    if (billingPlan) {
+        if (user.is_premium) {
+            billingPlan.textContent = 'Premium';
+            billingPlan.style.color = 'var(--text-primary)';
+            if (subscribeBtn) subscribeBtn.style.display = 'none';
+            if (cancelBtn) cancelBtn.style.display = 'block';
+        } else {
+            billingPlan.textContent = 'Standard';
+            billingPlan.style.color = 'var(--text-secondary)';
+            if (subscribeBtn) subscribeBtn.style.display = 'block';
+            if (cancelBtn) cancelBtn.style.display = 'none';
+        }
+    }
+
+    // Handle Premium depth locks
+    const optDepth6 = document.getElementById('optDepth6');
+    const optDepth8 = document.getElementById('optDepth8');
+    const depthSelect = document.getElementById('depthLevel');
+
+    if (optDepth6 && optDepth8) {
+        if (user.is_premium) {
+            optDepth6.disabled = false;
+            optDepth6.textContent = 'Approfondie (6 req) — 25 Crédits';
+            optDepth8.disabled = false;
+            optDepth8.textContent = 'Maximale (8 req) — 35 Crédits';
+        } else {
+            optDepth6.disabled = true;
+            optDepth6.textContent = 'Approfondie (6 req) — 25 Crédits 🔒 Premium';
+            optDepth8.disabled = true;
+            optDepth8.textContent = 'Maximale (8 req) — 35 Crédits 🔒 Premium';
+
+            // Reset to default if a locked option is selected
+            if (depthSelect && parseInt(depthSelect.value) > 4) {
+                depthSelect.value = '4';
+            }
+        }
+    }
 }
 
 function initUserDropdown() {
@@ -88,6 +137,15 @@ function initUserDropdown() {
     document.addEventListener('click', (e) => {
         if (sidebarUser && !sidebarUser.contains(e.target)) {
             sidebarUser.classList.remove('open');
+        }
+    });
+
+    // Close billing dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        const billingMenu = document.getElementById('billingMenuOptions');
+        const billingBtn = document.getElementById('btnBillingMenu');
+        if (billingMenu && billingBtn && !billingMenu.contains(e.target) && e.target !== billingBtn) {
+            billingMenu.classList.remove('show');
         }
     });
 
@@ -230,44 +288,309 @@ async function saveProfileSettings() {
 }
 
 async function deleteAccount() {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.')) return;
-
-    try {
-        const res = await fetch('/api/auth/account', { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-            window.location.href = '/login.html';
-        } else {
-            showToast('Erreur: ' + (data.error || 'Suppression échouée'), 'error');
+    showConfirmModal('Supprimer le compte', 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.', async () => {
+        try {
+            const res = await fetch('/api/auth/account', { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                window.location.href = '/login.html';
+            } else {
+                showToast('Erreur: ' + (data.error || 'Suppression échouée'), 'error');
+            }
+        } catch (err) {
+            showToast('Erreur réseau: ' + err.message, 'error');
         }
-    } catch (err) {
-        showToast('Erreur réseau: ' + err.message, 'error');
-    }
+    });
+}
+
+// ============ REUSABLE UI ============
+function showConfirmModal(title, message, onConfirm, actionText = 'Confirmer', isDanger = true) {
+    const modal = document.getElementById('confirmModal');
+    if (!modal) return;
+
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+
+    const cancelBtn = document.getElementById('confirmCancelBtn');
+    const actionBtn = document.getElementById('confirmActionBtn');
+
+    // Clear old event listeners by cloning
+    const newCancel = cancelBtn.cloneNode(true);
+    const newAction = actionBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    actionBtn.parentNode.replaceChild(newAction, actionBtn);
+
+    newAction.textContent = actionText;
+    newAction.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+
+    newCancel.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+
+    newAction.addEventListener('click', () => {
+        modal.style.display = 'none';
+        onConfirm();
+    });
+
+    modal.style.display = 'flex';
 }
 
 // ============ NAVIGATION ============
 function initNavigation() {
-    document.querySelectorAll('.nav-link').forEach(link => {
+    // Nav links
+    document.querySelectorAll('.nav-link:not(.nav-group-toggle)').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             navigateTo(link.dataset.section);
         });
     });
+
+    // Sub-lists toggling
+    document.querySelectorAll('.nav-group-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            const group = toggle.closest('.nav-group');
+            if (group) group.classList.toggle('active');
+        });
+    });
 }
 
 function navigateTo(section) {
+    if (section === 'billing') {
+        section = 'billing-facturation';
+    }
+
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+
     const activeLink = document.querySelector(`[data-section="${section}"]`);
-    if (activeLink) activeLink.classList.add('active');
+    if (activeLink) {
+        activeLink.classList.add('active');
+        const parentGroup = activeLink.closest('.nav-group');
+        if (parentGroup) parentGroup.classList.add('active');
+    }
 
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     const activeSection = document.getElementById(`section-${section}`);
     if (activeSection) activeSection.classList.add('active');
 
+    // Load data hooks
     if (section === 'sources') loadSources();
     if (section === 'agents') pollAgentStatus();
     if (section === 'memoir') loadMemoirProjects();
-    if (section === 'dashboard') refreshDashboard();
+    if (section === 'billing-facturation') loadTransactionHistory();
+    if (section === 'billing-paiement') loadPaymentMethods();
+}
+
+// ============ BILLING ============
+let pendingPaymentCallback = null;
+
+function deletePaymentMethod() {
+    showConfirmModal('Supprimer le moyen de paiement', 'Êtes-vous sûr de vouloir supprimer votre moyen de paiement ?', async () => {
+        try {
+            const res = await apiDelete('/api/billing/payment-method');
+            if (res.success) {
+                currentUser = res.data;
+                loadUserProfile(currentUser);
+                showToast('Moyen de paiement supprimé avec succès.', 'success');
+                // Refresh list
+                loadPaymentMethods();
+            } else {
+                showToast(res.error || 'Erreur lors de la suppression', 'error');
+            }
+        } catch (err) {
+            showToast('Erreur réseau', 'error');
+        }
+    }, 'Supprimer', true);
+}
+
+function requirePaymentMethod(onSuccess) {
+    if (currentUser && currentUser.has_payment_method) {
+        onSuccess();
+    } else {
+        pendingPaymentCallback = onSuccess;
+        navigateTo('billing-paiement');
+        showToast('Veuillez ajouter un moyen de paiement pour continuer.', 'info');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Payment Form setup (Inline)
+    const pmtSave = document.getElementById('inlinePaymentSaveBtn');
+
+    if (pmtSave) {
+        pmtSave.addEventListener('click', async () => {
+            const cardInput = document.getElementById('inlinePmtCard');
+            if (!cardInput.value.trim()) {
+                showToast('Veuillez entrer un numéro de carte.', 'error');
+                return;
+            }
+
+            try {
+                // In a real app we would stripe tokenize here. For now we mock it.
+                const res = await apiPost('/api/billing/payment-method', {});
+                if (res.success) {
+                    currentUser = res.data;
+                    loadUserProfile(currentUser);
+                    showToast('Moyen de paiement enregistré', 'success');
+
+                    // Clear fields
+                    cardInput.value = '';
+                    document.getElementById('inlinePmtExp').value = '';
+                    document.getElementById('inlinePmtCvc').value = '';
+
+                    loadPaymentMethods();
+
+                    // Resume whatever action they were trying to do
+                    if (pendingPaymentCallback) {
+                        pendingPaymentCallback();
+                        pendingPaymentCallback = null;
+                    }
+                } else {
+                    showToast(res.error || 'Erreur d\'enregistrement', 'error');
+                }
+            } catch (err) {
+                showToast('Erreur réseau', 'error');
+            }
+        });
+    }
+
+    const subBtn = document.getElementById('btnSubscribePremium');
+    if (subBtn) {
+        subBtn.addEventListener('click', () => {
+            requirePaymentMethod(() => {
+                showConfirmModal('Souscrire au Premium', 'Confirmez-vous l\'abonnement Premium pour 2.99$/mois ?', async () => {
+                    try {
+                        const res = await apiPost('/api/billing/subscribe-premium');
+                        if (res.success) {
+                            currentUser = res.data;
+                            loadUserProfile(currentUser);
+                            showToast(res.message, 'success');
+                        } else {
+                            showToast(res.error || 'Erreur', 'error');
+                        }
+                    } catch (err) {
+                        showToast('Erreur réseau', 'error');
+                    }
+                }, 'Souscrire', false);
+            });
+        });
+    }
+
+    const cancelBtn = document.getElementById('btnCancelPremium');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            showConfirmModal('Annuler l\'abonnement', 'Êtes-vous sûr de vouloir annuler votre abonnement Premium ?', async () => {
+                try {
+                    const res = await apiPost('/api/billing/cancel-premium');
+                    if (res.success) {
+                        currentUser = res.data;
+                        loadUserProfile(currentUser);
+                        showToast(res.message, 'success');
+                    } else {
+                        showToast(res.error || 'Erreur', 'error');
+                    }
+                } catch (err) {
+                    showToast('Erreur réseau', 'error');
+                }
+            }, 'Se Désabonner', true);
+        });
+    }
+});
+
+async function buyCredits(packageId) {
+    requirePaymentMethod(() => {
+        showConfirmModal('Acheter des crédits', `Confirmez-vous l'achat du pack ${packageId === 'small' ? 'Découverte (0.99$)' : 'Étudiant (3.99$)'} ?`, async () => {
+            try {
+                const res = await apiPost('/api/billing/buy-credits', { packageId });
+                if (res.success) {
+                    currentUser = res.data;
+                    loadUserProfile(currentUser);
+                    showToast(res.message, 'success');
+                    loadTransactionHistory();
+                } else {
+                    showToast(res.error || 'Erreur lors de l\'achat', 'error');
+                }
+            } catch (err) {
+                showToast('Erreur réseau', 'error');
+            }
+        }, 'Acheter', false);
+    });
+}
+
+async function loadTransactionHistory() {
+    const tbody = document.getElementById('billingHistoryBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement...</td></tr>';
+
+    try {
+        const res = await apiGet('/api/billing/history');
+
+        if (res.success) {
+            if (res.data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--text-secondary);">Aucune transaction trouvée.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = res.data.map(t => {
+                const date = new Date(t.created_at).toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                const amountText = t.amount > 0 ? `${t.amount.toFixed(2)}$` : '—';
+                const creditColor = t.credits_changed > 0 ? 'var(--color-success)' : (t.credits_changed < 0 ? 'var(--color-danger)' : 'var(--text-secondary)');
+                const creditPrefix = t.credits_changed > 0 ? '+' : '';
+
+                return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
+                    <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
+                    <td style="padding: 12px; color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(t.description)}</td>
+                    <td style="padding: 12px; color: var(--text-secondary); font-size: 0.95rem;">${amountText}</td>
+                    <td style="padding: 12px; color: ${creditColor}; font-weight: 600; font-size: 0.95rem;">${creditPrefix}${t.credits_changed}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--color-danger);">Erreur du chargement.</td></tr>';
+        }
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--color-danger);">Erreur réseau.</td></tr>';
+    }
+}
+
+function loadPaymentMethods() {
+    const container = document.getElementById('paymentMethodsContainer');
+    if (!container) return;
+
+    if (currentUser && currentUser.has_payment_method) {
+        container.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-tertiary);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="background: var(--bg-secondary); padding: 8px; border-radius: 4px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2" width="24" height="24">
+                            <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
+                            <line x1="2" y1="10" x2="22" y2="10" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; color: var(--text-primary);">Visa terminant par **** 4242</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Expire 12/28</div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="deletePaymentMethod()" style="color: var(--color-danger); border-color: var(--color-danger);">Supprimer</button>
+            </div>
+        `;
+        document.getElementById('addPaymentFormContainer').style.display = 'none';
+    } else {
+        container.innerHTML = `
+            <div class="empty-state small" style="padding: 30px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="margin: 0 auto 12px; color: var(--text-secondary); opacity: 0.5;">
+                    <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                </svg>
+                <p>Aucun moyen de paiement enregistré.</p>
+            </div>
+        `;
+        document.getElementById('addPaymentFormContainer').style.display = 'block';
+    }
 }
 
 // ============ API HELPERS ============
@@ -450,7 +773,15 @@ async function launchResearch() {
 
     try {
         const result = await apiPost('/api/agents/research', { mindmapText, threshold, depth });
+
         if (result.success) {
+            if (result.user) {
+                currentUser = result.user;
+                loadUserProfile(currentUser);
+                showToast(`Recherche lancée ! (Solde: ${currentUser.credits} crédits)`, 'info');
+            }
+
+            document.getElementById('pipeline-research').classList.add('active');
             navigateTo('agents');
             startPolling();
             // Start source polling too (real-time updates)
@@ -499,7 +830,15 @@ async function launchSynthesis() {
 
     try {
         const result = await apiPost('/api/agents/synthesize', { projectId: selectedProjectId });
+
         if (result.success) {
+            if (result.user) {
+                currentUser = result.user;
+                loadUserProfile(currentUser);
+                showToast(`Synthèse lancée ! (Solde: ${currentUser.credits} crédits)`, 'info');
+            }
+
+            document.getElementById('pipeline-research').classList.remove('active');
             navigateTo('agents');
             startPolling();
         } else {
@@ -650,14 +989,15 @@ function closeFolder() {
 }
 
 async function deleteProject(projectId) {
-    if (!confirm('Supprimer ce projet et toutes ses sources ?')) return;
-    try {
-        await apiDelete(`/api/projects/${projectId}`);
-        if (selectedProjectId === projectId) closeFolder();
-        loadProjects();
-    } catch (err) {
-        alert('Erreur: ' + err.message);
-    }
+    showConfirmModal('Supprimer le projet', 'Voulez-vous vraiment supprimer ce projet et toutes ses sources ?', async () => {
+        try {
+            await apiDelete(`/api/projects/${projectId}`);
+            if (selectedProjectId === projectId) closeFolder();
+            loadProjects();
+        } catch (err) {
+            alert('Erreur: ' + err.message);
+        }
+    });
 }
 
 async function loadSources() {
@@ -767,13 +1107,14 @@ async function addSourceManual() {
 }
 
 async function deleteSource(id) {
-    if (!confirm('Supprimer cette source ?')) return;
-    try {
-        await apiDelete(`/api/sources/${id}`);
-        loadSources();
-    } catch (err) {
-        alert('Erreur: ' + err.message);
-    }
+    showConfirmModal('Supprimer la source', 'Êtes-vous sûr de vouloir supprimer cette source ?', async () => {
+        try {
+            await apiDelete(`/api/sources/${id}`);
+            loadSources();
+        } catch (err) {
+            alert('Erreur: ' + err.message);
+        }
+    });
 }
 
 
@@ -1186,38 +1527,6 @@ function toggleSection(header) {
     const toggle = header.querySelector('.memoir-section-toggle');
     body.classList.toggle('open');
     toggle.classList.toggle('open');
-}
-
-// ============ DASHBOARD ============
-async function refreshDashboard() {
-    try {
-        loadSources();
-        const memoirResult = await apiGet('/api/memoir');
-        if (memoirResult.success && memoirResult.data.structure) {
-            document.getElementById('sectionCount').textContent =
-                (memoirResult.data.structure.sections || []).length;
-        }
-
-        const statusResult = await apiGet('/api/agents/status');
-        if (statusResult.success) {
-            document.getElementById('agentStatus').textContent = getStatusLabel(statusResult.data.phase);
-
-            // Update activity log
-            const logs = statusResult.data.logs || [];
-            const activityDiv = document.getElementById('dashboardActivity');
-            if (logs.length > 0) {
-                activityDiv.innerHTML = logs.slice(-8).reverse().map(log => {
-                    const time = new Date(log.time).toLocaleTimeString('fr-FR');
-                    return `<div class="log-entry">
-                        <span class="log-time">${time}</span>
-                        <span class="log-message">${log.agent ? `<span class="log-agent">${log.agent}</span>` : ''}${escapeHtml(log.message)}</span>
-                    </div>`;
-                }).join('');
-            }
-        }
-    } catch (err) {
-        console.error('Dashboard refresh error:', err);
-    }
 }
 
 // ============ PARSE MARKDOWN TABLE ============

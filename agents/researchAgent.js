@@ -12,9 +12,7 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-
-const SAMBANOVA_API_URL = 'https://api.sambanova.ai/v1/chat/completions';
-const MODEL = 'DeepSeek-V3.1-cb';
+const { callLLM } = require('../utils/apiClient');
 
 class ResearchAgent {
     constructor() {
@@ -184,20 +182,17 @@ class ResearchAgent {
         }
 
         try {
-            const response = await axios.post(SAMBANOVA_API_URL, {
-                model: MODEL,
+            const content = await callLLM({
+                label: 'Search queries',
+                maxTokens: 400,
+                temperature: 0.7,
+                timeout: 15000,
                 messages: [
                     { role: 'system', content: 'Génère des requêtes de recherche. Réponds UNIQUEMENT avec un tableau JSON de strings.' },
                     { role: 'user', content: `Génère ${queryCount} requêtes de recherche web variées (français + anglais) pour trouver des articles scientifiques sur: "${topic}".\nRéponds UNIQUEMENT: ["query1", "query2", ...]` }
-                ],
-                max_tokens: 400,
-                temperature: 0.7
-            }, {
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                timeout: 15000
+                ]
             });
 
-            const content = response.data.choices[0].message.content.trim();
             const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
             const queries = JSON.parse(cleaned);
             return Array.isArray(queries) ? queries.slice(0, queryCount) : [topic];
@@ -331,8 +326,12 @@ class ResearchAgent {
      * AI-generated academic sources with realistic content
      */
     async _generateAISources(topic, apiKey, count = 4) {
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const content = await callLLM({
+            apiKey,
+            label: 'AI source generation',
+            maxTokens: 4000,
+            temperature: 0.5,
+            timeout: 45000,
             messages: [
                 { role: 'system', content: 'Tu es un expert bibliographique. Génère des sources académiques réalistes et détaillées. Réponds en JSON.' },
                 {
@@ -357,15 +356,9 @@ Réponds en JSON:
     "relevanceScore": 85
   }
 ]` }
-            ],
-            max_tokens: 4000,
-            temperature: 0.5
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 45000
+            ]
         });
 
-        const content = response.data.choices[0].message.content.trim();
         const cleaned = content.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
         const parsed = JSON.parse(cleaned);
 
@@ -426,8 +419,12 @@ Réponds en JSON:
      * AI academic analysis of a source
      */
     async _analyzeSource(title, content, topic, apiKey) {
-        const response = await axios.post(SAMBANOVA_API_URL, {
-            model: MODEL,
+        const result = await callLLM({
+            apiKey,
+            label: 'Source analysis',
+            maxTokens: 1500,
+            temperature: 0.3,
+            timeout: 30000,
             messages: [
                 { role: 'system', content: 'Analyse académique. Réponds en JSON.' },
                 {
@@ -444,16 +441,10 @@ JSON requis:
   "methodology": "Méthodologie identifiée",
   "relevanceScore": 75
 }` }
-            ],
-            max_tokens: 1500,
-            temperature: 0.3
-        }, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            timeout: 30000
+            ]
         });
 
-        const raw = response.data.choices[0].message.content.trim();
-        const cleaned = raw.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
+        const cleaned = result.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
         return JSON.parse(cleaned);
     }
 

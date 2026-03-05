@@ -11,6 +11,7 @@ const { parseMindmap } = require('./utils/mindmapParser');
 const { SourceStore } = require('./utils/sourceStore');
 const { UserStore } = require('./utils/userStore');
 const { Orchestrator } = require('./agents/orchestrator');
+const { callLLM } = require('./utils/apiClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -201,13 +202,15 @@ app.post('/api/mindmap/generate', async (req, res) => {
         const { title } = req.body;
         if (!title) return res.status(400).json({ error: 'title is required' });
 
-        const apiKey = process.env.SAMBANOVA_API_KEY || process.env.TOGETHER_API_KEY || '';
+        const hasKey = !!process.env.GEMINI_API_KEY;
         let mindmapText;
 
-        if (apiKey && apiKey !== 'your_together_ai_key_here') {
-            const axios = require('axios');
-            const response = await axios.post('https://api.sambanova.ai/v1/chat/completions', {
-                model: 'DeepSeek-V3.1-cb',
+        if (hasKey) {
+            const content = await callLLM({
+                label: 'Mindmap generation',
+                maxTokens: 2500,
+                temperature: 0.75,
+                maxRetries: 5,
                 messages: [
                     {
                         role: 'system', content: `Tu es un expert en structuration de mémoires académiques. Tu génères des mindmaps Mermaid.js SPÉCIFIQUES au sujet donné.
@@ -253,17 +256,10 @@ mindmap
 
 Maintenant génère pour: "${title}"
 Réponds UNIQUEMENT avec le code mermaid.` }
-                ],
-                max_tokens: 2500,
-                temperature: 0.75
-            }, {
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                timeout: 45000
+                ]
             });
 
-            let content = response.data.choices[0].message.content.trim();
-            content = content.replace(/```mermaid\s*/gi, '').replace(/```\s*/g, '').trim();
-            mindmapText = content;
+            mindmapText = content.replace(/```mermaid\s*/gi, '').replace(/```\s*/g, '').trim();
         } else {
             mindmapText = `mindmap\n  root((${title}))\n    Contexte et enjeux\n      Définitions clés\n      Historique\n      Problématiques actuelles\n    État de l'art\n      Approches théoriques\n      Solutions existantes\n      Analyse comparative\n    Méthodologie\n      Collecte de données\n      Outils et frameworks\n      Protocole expérimental\n    Résultats et analyse\n      Résultats quantitatifs\n      Analyse qualitative\n      Discussion\n    Perspectives\n      Limites identifiées\n      Améliorations possibles\n      Travaux futurs`;
         }
@@ -271,9 +267,18 @@ Réponds UNIQUEMENT avec le code mermaid.` }
         res.json({ success: true, data: mindmapText });
     } catch (err) {
         console.error('Mindmap generation error:', err.message);
-        const { title } = req.body;
-        const fallback = `mindmap\n  root((${title}))\n    Contexte\n      Définitions\n      Historique\n    État de l'art\n      Approches\n      Comparaison\n    Méthodologie\n      Outils\n      Protocole\n    Résultats\n      Analyse\n    Perspectives\n      Limites\n      Travaux futurs`;
-        res.json({ success: true, data: fallback });
+        // Return the error to the user instead of hiding it behind a generic fallback
+        const isRateLimit = err.message && err.message.includes('429');
+        if (isRateLimit) {
+            res.status(429).json({
+                error: 'Limite de requêtes API atteinte. Veuillez attendre 1-2 minutes avant de réessayer.',
+                rateLimited: true
+            });
+        } else {
+            const { title } = req.body;
+            const fallback = `mindmap\n  root((${title}))\n    Contexte\n      Définitions\n      Historique\n    État de l'art\n      Approches\n      Comparaison\n    Méthodologie\n      Outils\n      Protocole\n    Résultats\n      Analyse\n    Perspectives\n      Limites\n      Travaux futurs`;
+            res.json({ success: true, data: fallback });
+        }
     }
 });
 
@@ -333,13 +338,41 @@ app.post('/api/agents/stop', (req, res) => {
     res.json({ success: true, message: 'Process stopped' });
 });
 
-// Step 1: Launch RESEARCH only
 app.post('/api/agents/research', async (req, res) => {
     try {
+        if (!req.session.userId) {
+            return res.status(401).json({ error: 'Vous devez être connecté pour lancer une recherche.' });
+        }
+
         const { mindmapText, threshold, depth } = req.body;
         if (!mindmapText) return res.status(400).json({ error: 'mindmapText is required' });
 
-        const apiKey = process.env.SAMBANOVA_API_KEY || process.env.TOGETHER_API_KEY || '';
+        const user = userStore.findById(req.session.userId);
+        if (!user) return res.status(401).json({ error: 'Utilisateur introuvable.' });
+
+        const numericDepth = parseInt(depth) || 4;
+        let cost = 0;
+        if (numericDepth <= 2) {
+            cost = 5;
+        } else if (numericDepth <= 4) {
+            cost = 15;
+        } else {
+            // Depth 6+ or 8+
+            if (!user.is_premium) {
+                return res.status(403).json({ error: 'La recherche approfondie nécessite l\'abonnement Premium.' });
+            }
+            cost = numericDepth === 6 ? 25 : 35;
+        }
+
+        if (user.credits < cost) {
+            return res.status(402).json({ error: `Crédits insuffisants. Il vous faut ${cost} crédits.` });
+        }
+
+        // Deduct credits
+        userStore.deductCredits(req.session.userId, cost);
+        userStore.addTransaction(req.session.userId, 'usage', 0, -cost, `Recherche approfondie (Profondeur: ${depth})`);
+
+        const apiKey = process.env.GEMINI_API_KEY || '';
         const mindmapData = parseMindmap(mindmapText);
 
         // Derive projectId from mindmap root label
@@ -356,7 +389,13 @@ app.post('/api/agents/research', async (req, res) => {
 
         orchestrator.runResearch(mindmapData, sourceStore, apiKey, settings, projectId);
 
-        res.json({ success: true, message: 'Research started', projectId, data: orchestrator.getStatus() });
+        res.json({
+            success: true,
+            message: 'Research started',
+            projectId,
+            data: orchestrator.getStatus(),
+            user: userStore.sanitize(userStore.findById(req.session.userId))
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -365,7 +404,7 @@ app.post('/api/agents/research', async (req, res) => {
 // Step 2: Launch SYNTHESIS + STRUCTURE (for a specific project)
 app.post('/api/agents/synthesize', async (req, res) => {
     try {
-        const apiKey = process.env.SAMBANOVA_API_KEY || process.env.TOGETHER_API_KEY || '';
+        const apiKey = process.env.GEMINI_API_KEY || '';
         const { projectId } = req.body;
 
         // Load mindmap from project storage (survives server restarts)
@@ -393,10 +432,26 @@ app.post('/api/agents/synthesize', async (req, res) => {
             return res.status(400).json({ error: 'Aucune mindmap chargée. Lancez d\'abord une recherche ou sélectionnez un projet.' });
         }
 
+        // Deduct credits for synthesis
+        const user = userStore.findById(req.session.userId);
+        if (!user) return res.status(401).json({ error: 'Utilisateur introuvable.' });
+
+        const cost = 10;
+        if (user.credits < cost) {
+            return res.status(402).json({ error: `Crédits insuffisants. Il vous faut ${cost} crédits.` });
+        }
+        userStore.deductCredits(req.session.userId, cost);
+        userStore.addTransaction(req.session.userId, 'usage', 0, -cost, 'Synthèse de documents générée');
+
         orchestrator.mindmapData = mindmapData;
         orchestrator.runSynthesis(sourceStore, apiKey, projectId);
 
-        res.json({ success: true, message: 'Synthesis started', data: orchestrator.getStatus() });
+        res.json({
+            success: true,
+            message: 'Synthesis started',
+            data: orchestrator.getStatus(),
+            user: userStore.sanitize(userStore.findById(req.session.userId))
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -408,7 +463,7 @@ app.post('/api/agents/run', async (req, res) => {
         const { mindmapText } = req.body;
         if (!mindmapText) return res.status(400).json({ error: 'mindmapText is required' });
 
-        const apiKey = process.env.SAMBANOVA_API_KEY || process.env.TOGETHER_API_KEY || '';
+        const apiKey = process.env.GEMINI_API_KEY || '';
         const mindmapData = parseMindmap(mindmapText);
         orchestrator.runResearch(mindmapData, sourceStore, apiKey);
 
@@ -432,6 +487,84 @@ app.get('/api/memoir/:projectId', (req, res) => {
     }
 });
 
+// ============ BILLING API ============
+
+app.post('/api/billing/buy-credits', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+        const { packageId } = req.body; // 'small' or 'large'
+
+        let amount = 0;
+        if (packageId === 'small') amount = 100;
+        else if (packageId === 'large') amount = 500;
+        else return res.status(400).json({ error: 'Forfait invalide' });
+
+        const user = userStore.addCredits(req.session.userId, amount);
+        userStore.addTransaction(req.session.userId, 'purchase', packageId === 'small' ? 0.99 : 3.99, amount, `Achat de ${amount} crédits (Pack ${packageId})`);
+
+        res.json({ success: true, message: `${amount} crédits ajoutés avec succès !`, data: userStore.sanitize(user) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/billing/subscribe-premium', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.setPremium(req.session.userId, true);
+        userStore.addTransaction(req.session.userId, 'subscription', 2.99, 0, 'Abonnement au Forfait Premium (1 mois)');
+
+        res.json({ success: true, message: 'Bienvenue dans le forfait Premium !', data: userStore.sanitize(user) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/billing/cancel-premium', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.setPremium(req.session.userId, false);
+        res.json({ success: true, message: 'Forfait Premium annulé.', data: userStore.sanitize(user) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/billing/payment-method', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.updatePaymentMethod(req.session.userId, true);
+        res.json({ success: true, message: 'Moyen de paiement enregistré.', data: userStore.sanitize(user) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/billing/history', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const transactions = userStore.getTransactionsByUserId(req.session.userId);
+        res.json({ success: true, data: transactions });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/billing/payment-method', (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.updatePaymentMethod(req.session.userId, false);
+        res.json({ success: true, message: 'Moyen de paiement supprimé.', data: userStore.sanitize(user) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============ SERVE FRONTEND ============
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -442,10 +575,10 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    const hasKey = (process.env.SAMBANOVA_API_KEY || process.env.TOGETHER_API_KEY) && process.env.TOGETHER_API_KEY !== 'your_together_ai_key_here';
+    const hasKey = !!process.env.GEMINI_API_KEY;
     const hasGoogleId = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE';
     console.log(`\n  🎓 Memoir Assistant Server running at http://localhost:${PORT}`);
-    console.log(`  🔑 SambaNova API Key: ${hasKey ? '✓ Detected' : '✗ Not set (demo mode)'}`);
+    console.log(`  🔑 Gemini API Key: ${hasKey ? '✓ Detected' : '✗ Not set (demo mode) — add GEMINI_API_KEY to .env'}`);
     console.log(`  🔐 Google OAuth: ${hasGoogleId ? '✓ Configured' : '✗ Not set — add GOOGLE_CLIENT_ID to .env'}`);
     console.log(`     Edit .env file to configure\n`);
 });
