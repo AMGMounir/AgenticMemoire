@@ -704,6 +704,45 @@ app.post('/api/billing/confirm-subscription', async (req, res) => {
     }
 });
 
+// Synchronously confirm credit purchase and store receipt
+app.post('/api/billing/confirm-credits', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const { paymentIntentId } = req.body;
+        if (!paymentIntentId) return res.status(400).json({ error: 'PaymentIntent ID manquant' });
+
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        if (pi.metadata.userId !== req.session.userId) {
+            return res.status(403).json({ error: 'Non autorisé' });
+        }
+
+        if (pi.status === 'succeeded' && pi.metadata.type === 'credits') {
+            const credits = parseInt(pi.metadata.credits, 10);
+            const amountInDollars = pi.amount_received / 100;
+
+            // Get receipt URL from the charge
+            let receiptUrl = null;
+            if (pi.latest_charge) {
+                try {
+                    const charge = await stripe.charges.retrieve(pi.latest_charge);
+                    receiptUrl = charge.receipt_url || null;
+                } catch (e) { /* ignore */ }
+            }
+
+            userStore.addCredits(req.session.userId, credits);
+            userStore.addTransaction(req.session.userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`, receiptUrl);
+
+            return res.json({ success: true, data: userStore.sanitize(userStore.findById(req.session.userId)) });
+        } else {
+            return res.status(400).json({ error: 'Paiement non finalisé' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/billing/stripe-payment-methods', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
@@ -718,13 +757,22 @@ app.get('/api/billing/stripe-payment-methods', async (req, res) => {
             type: 'card',
         });
 
-        const cards = paymentMethods.data.map(pm => ({
-            id: pm.id,
-            brand: pm.card.brand,
-            last4: pm.card.last4,
-            exp_month: pm.card.exp_month,
-            exp_year: pm.card.exp_year,
-        }));
+        // Deduplicate cards by fingerprint (same physical card saved multiple times)
+        const seen = new Set();
+        const cards = [];
+        for (const pm of paymentMethods.data) {
+            const fingerprint = pm.card.fingerprint;
+            if (!seen.has(fingerprint)) {
+                seen.add(fingerprint);
+                cards.push({
+                    id: pm.id,
+                    brand: pm.card.brand,
+                    last4: pm.card.last4,
+                    exp_month: pm.card.exp_month,
+                    exp_year: pm.card.exp_year,
+                });
+            }
+        }
 
         res.json({ success: true, data: cards });
     } catch (err) {
@@ -732,7 +780,7 @@ app.get('/api/billing/stripe-payment-methods', async (req, res) => {
     }
 });
 
-// Delete a Stripe payment method
+// Delete a Stripe payment method (and all duplicates of the same card)
 app.delete('/api/billing/stripe-payment-methods/:pmId', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
@@ -740,14 +788,24 @@ app.delete('/api/billing/stripe-payment-methods/:pmId', async (req, res) => {
         const { pmId } = req.params;
         const user = userStore.findById(req.session.userId);
 
-        // Verify the payment method belongs to this customer
+        // Retrieve the target payment method to get its fingerprint
         const pm = await stripe.paymentMethods.retrieve(pmId);
         if (pm.customer !== user.stripe_customer_id) {
             return res.status(403).json({ error: 'Non autorisé' });
         }
 
-        await stripe.paymentMethods.detach(pmId);
-        res.json({ success: true, message: 'Carte supprimée avec succès.' });
+        const fingerprint = pm.card.fingerprint;
+
+        // Find ALL payment methods with the same fingerprint and detach them all
+        const allMethods = await stripe.paymentMethods.list({
+            customer: user.stripe_customer_id,
+            type: 'card',
+        });
+
+        const toDetach = allMethods.data.filter(m => m.card.fingerprint === fingerprint);
+        await Promise.all(toDetach.map(m => stripe.paymentMethods.detach(m.id)));
+
+        res.json({ success: true, message: `Carte supprimée (${toDetach.length} entrée(s)).` });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -860,8 +918,18 @@ app.post('/api/webhooks/stripe', async (req, res) => {
             if (userId && metadata.type === 'credits') {
                 const credits = parseInt(metadata.credits, 10);
                 const amountInDollars = paymentIntent.amount_received / 100;
+
+                // Get receipt URL from the charge
+                let receiptUrl = null;
+                if (paymentIntent.latest_charge) {
+                    try {
+                        const charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+                        receiptUrl = charge.receipt_url || null;
+                    } catch (e) { /* ignore */ }
+                }
+
                 userStore.addCredits(userId, credits);
-                userStore.addTransaction(userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`);
+                userStore.addTransaction(userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`, receiptUrl);
             }
         } else if (event.type === 'invoice.payment_succeeded') {
             const invoice = event.data.object;

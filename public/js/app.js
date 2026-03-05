@@ -562,9 +562,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (error) {
                         document.getElementById('card-errors').textContent = error.message;
                     } else if (paymentIntent.status === 'succeeded') {
-                        showToast('Achat réussi !', 'success');
-                        closePaymentModal();
-                        setTimeout(loadTransactionHistory, 2000); // give webhook time
+                        // Synchronously confirm with backend to store receipt URL
+                        const confirmRes = await apiPost('/api/billing/confirm-credits', {
+                            paymentIntentId: paymentIntent.id
+                        });
+
+                        if (confirmRes.success) {
+                            showToast('Achat réussi !', 'success');
+                            closePaymentModal();
+                            currentUser = confirmRes.data;
+                            loadUserProfile(currentUser);
+                            loadTransactionHistory();
+                        } else {
+                            showToast(confirmRes.error || 'Erreur lors de la validation.', 'error');
+                        }
                     }
 
                 } else if (currentPaymentContext === 'premium') {
@@ -736,7 +747,7 @@ async function loadPaymentMethods() {
                         ${res.data.map(card => {
                 const brandName = card.brand.charAt(0).toUpperCase() + card.brand.slice(1);
                 return `
-                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color);">
+                            <div data-card-id="${card.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color);">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <div style="background: var(--bg-secondary); padding: 8px; border-radius: 4px;">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2" width="24" height="24">
@@ -782,7 +793,25 @@ async function deleteStripeCard(pmId) {
             const res = await apiDelete(`/api/billing/stripe-payment-methods/${pmId}`);
             if (res.success) {
                 showToast(res.message || 'Carte supprimée.', 'success');
-                loadPaymentMethods();
+                // Remove just the card element from DOM instead of re-rendering everything
+                const cardEl = document.querySelector(`[data-card-id="${pmId}"]`);
+                if (cardEl) {
+                    cardEl.style.transition = 'opacity 0.3s, max-height 0.3s';
+                    cardEl.style.opacity = '0';
+                    cardEl.style.maxHeight = '0';
+                    cardEl.style.overflow = 'hidden';
+                    cardEl.style.padding = '0';
+                    setTimeout(() => {
+                        cardEl.remove();
+                        // Check if there are any cards left
+                        const remaining = document.querySelectorAll('[data-card-id]');
+                        if (remaining.length === 0) {
+                            loadPaymentMethods(); // Show empty state
+                        }
+                    }, 350);
+                } else {
+                    loadPaymentMethods();
+                }
             } else {
                 showToast(res.error || 'Erreur', 'error');
             }
