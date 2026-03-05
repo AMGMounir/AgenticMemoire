@@ -345,19 +345,23 @@ function initNavigation() {
         });
     });
 
-    // Sub-lists toggling
+    // Sub-lists toggling and parent navigation
     document.querySelectorAll('.nav-group-toggle').forEach(toggle => {
         toggle.addEventListener('click', (e) => {
             e.preventDefault();
             const group = toggle.closest('.nav-group');
             if (group) group.classList.toggle('active');
+
+            if (toggle.dataset.section) {
+                navigateTo(toggle.dataset.section);
+            }
         });
     });
 }
 
 function navigateTo(section) {
     if (section === 'billing') {
-        section = 'billing-facturation';
+        section = 'billing-overview';
     }
 
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -366,7 +370,10 @@ function navigateTo(section) {
     if (activeLink) {
         activeLink.classList.add('active');
         const parentGroup = activeLink.closest('.nav-group');
-        if (parentGroup) parentGroup.classList.add('active');
+        // Ensure parent group is active if a child is selected
+        if (parentGroup && !activeLink.classList.contains('nav-group-toggle')) {
+            parentGroup.classList.add('active');
+        }
     }
 
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
@@ -377,6 +384,9 @@ function navigateTo(section) {
     if (section === 'sources') loadSources();
     if (section === 'agents') pollAgentStatus();
     if (section === 'memoir') loadMemoirProjects();
+    if (section === 'billing-overview') {
+        // Just general update if needed
+    }
     if (section === 'billing-facturation') loadTransactionHistory();
     if (section === 'billing-paiement') loadPaymentMethods();
 }
@@ -403,22 +413,89 @@ function deletePaymentMethod() {
     }, 'Supprimer', true);
 }
 
-function requirePaymentMethod(onSuccess) {
+function requirePaymentMethod(onSuccess, isSubscription = false) {
     if (currentUser && currentUser.has_payment_method) {
         onSuccess();
     } else {
         pendingPaymentCallback = onSuccess;
-        navigateTo('billing-paiement');
-        showToast('Veuillez ajouter un moyen de paiement pour continuer.', 'info');
+        const modal = document.getElementById('paymentModal');
+        const checkboxContainer = document.getElementById('pmtSaveCheckboxContainer');
+        const checkbox = document.getElementById('pmtSaveCheckbox');
+
+        if (checkbox) {
+            if (isSubscription) {
+                checkbox.checked = true;
+                if (checkboxContainer) checkboxContainer.style.display = 'none';
+            } else {
+                checkbox.checked = false;
+                if (checkboxContainer) checkboxContainer.style.display = 'block';
+            }
+        }
+
+        if (modal) modal.style.display = 'flex';
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Payment Form setup (Inline)
-    const pmtSave = document.getElementById('inlinePaymentSaveBtn');
+    // Payment Modal setup (Popup)
+    const pmtModal = document.getElementById('paymentModal');
+    const pmtCancel = document.getElementById('paymentCancelBtn');
+    const pmtSave = document.getElementById('paymentSaveBtn');
+
+    if (pmtCancel) {
+        pmtCancel.addEventListener('click', () => {
+            if (pmtModal) pmtModal.style.display = 'none';
+            pendingPaymentCallback = null;
+        });
+    }
 
     if (pmtSave) {
         pmtSave.addEventListener('click', async () => {
+            const cardInput = document.getElementById('pmtCard');
+            if (cardInput && !cardInput.value.trim()) {
+                showToast('Veuillez entrer un numéro de carte.', 'error');
+                return;
+            }
+
+            const checkbox = document.getElementById('pmtSaveCheckbox');
+            const shouldSave = checkbox ? checkbox.checked : true;
+
+            try {
+                if (shouldSave) {
+                    const res = await apiPost('/api/billing/payment-method', {});
+                    if (res.success) {
+                        currentUser = res.data;
+                        loadUserProfile(currentUser);
+                        showToast('Moyen de paiement enregistré', 'success');
+                        loadPaymentMethods();
+
+                        if (pmtModal) pmtModal.style.display = 'none';
+                        if (pendingPaymentCallback) {
+                            pendingPaymentCallback();
+                            pendingPaymentCallback = null;
+                        }
+                    } else {
+                        showToast(res.error || 'Erreur d\'enregistrement', 'error');
+                    }
+                } else {
+                    // One-time payment, don't save.
+                    if (pmtModal) pmtModal.style.display = 'none';
+                    if (pendingPaymentCallback) {
+                        pendingPaymentCallback();
+                        pendingPaymentCallback = null;
+                    }
+                }
+            } catch (err) {
+                showToast('Erreur réseau', 'error');
+            }
+        });
+    }
+
+    // Payment Form setup (Inline view in Paiement)
+    const inlinePmtSave = document.getElementById('inlinePaymentSaveBtn');
+
+    if (inlinePmtSave) {
+        inlinePmtSave.addEventListener('click', async () => {
             const cardInput = document.getElementById('inlinePmtCard');
             if (!cardInput.value.trim()) {
                 showToast('Veuillez entrer un numéro de carte.', 'error');
@@ -439,12 +516,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('inlinePmtCvc').value = '';
 
                     loadPaymentMethods();
-
-                    // Resume whatever action they were trying to do
-                    if (pendingPaymentCallback) {
-                        pendingPaymentCallback();
-                        pendingPaymentCallback = null;
-                    }
                 } else {
                     showToast(res.error || 'Erreur d\'enregistrement', 'error');
                 }
@@ -472,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         showToast('Erreur réseau', 'error');
                     }
                 }, 'Souscrire', false);
-            });
+            }, true); // force Subscription context
         });
     }
 
@@ -540,12 +611,14 @@ async function loadTransactionHistory() {
                 const amountText = t.amount > 0 ? `${t.amount.toFixed(2)}$` : '—';
                 const creditColor = t.credits_changed > 0 ? 'var(--color-success)' : (t.credits_changed < 0 ? 'var(--color-danger)' : 'var(--text-secondary)');
                 const creditPrefix = t.credits_changed > 0 ? '+' : '';
+                const receiptButton = t.amount > 0 ? `<button class="btn btn-secondary btn-sm" onclick="showToast('Facture #${t.id} téléchargée.', 'success')">PDF</button>` : '—';
 
                 return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
                     <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
                     <td style="padding: 12px; color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(t.description)}</td>
                     <td style="padding: 12px; color: var(--text-secondary); font-size: 0.95rem;">${amountText}</td>
                     <td style="padding: 12px; color: ${creditColor}; font-weight: 600; font-size: 0.95rem;">${creditPrefix}${t.credits_changed}</td>
+                    <td style="padding: 12px; text-align: right;">${receiptButton}</td>
                 </tr>`;
             }).join('');
         } else {

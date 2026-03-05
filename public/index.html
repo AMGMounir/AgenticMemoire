@@ -71,32 +71,7 @@
         </a>
       </li>
       <li class="nav-group">
-        <a href="#" class="nav-link nav-group-toggle" id="nav-billing-group">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
-            <line x1="2" y1="10" x2="22" y2="10" />
-          </svg>
-          <span style="flex: 1;">Crédits & Forfaits</span>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
-            height="16">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </a>
-        <ul class="nav-sublist" id="billingSublist">
-          <li>
-            <a href="#" class="nav-link sub-link" data-section="billing-facturation" id="nav-billing-facturation">
-              <span>Facturation</span>
-            </a>
-          </li>
-          <li>
-            <a href="#" class="nav-link sub-link" data-section="billing-paiement" id="nav-billing-paiement">
-              <span>Paiement</span>
-            </a>
-          </li>
-        </ul>
-      </li>
-      <li class="nav-group">
-        <a href="#" class="nav-link nav-group-toggle" id="nav-billing-group">
+        <a href="#" class="nav-link nav-group-toggle" data-section="billing-overview" id="nav-billing-group">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
             <line x1="2" y1="10" x2="22" y2="10" />
@@ -521,11 +496,12 @@
       </div>
     </section>
 
-    <!-- BILLING SECTION: FACTURATION -->
-    <section class="content-section" id="section-billing-facturation">
+    <!-- BILLING SECTION: OVERVIEW -->
+    <section class="content-section" id="section-billing-overview">
       <div class="section-header">
-        <h1>Facturation</h1>
-        <p class="section-subtitle">Gérez vos crédits de recherche, vos forfaits et visualisez votre historique.</p>
+        <h1>Crédits & Forfaits</h1>
+        <p class="section-subtitle">Gérez vos crédits de recherche, vos forfaits et débloquez la puissance maximale de
+          l'IA.</p>
       </div>
 
       <div class="dashboard-grid">
@@ -618,9 +594,17 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- BILLING SECTION: FACTURATION (Historique) -->
+    <section class="content-section" id="section-billing-facturation">
+      <div class="section-header">
+        <h1>Facturation</h1>
+        <p class="section-subtitle">Visualisez l'historique de vos requêtes, achats et téléchargez vos factures.</p>
+      </div>
 
       <!-- Transaction History Table -->
-      <div class="card" style="margin-top: 24px;">
+      <div class="card">
         <div class="card-header">
           <h2>Historique de facturation</h2>
         </div>
@@ -633,11 +617,13 @@
                   <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Description</th>
                   <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Montant</th>
                   <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Crédits</th>
+                  <th style="padding: 12px; font-weight: 500; color: var(--text-secondary); text-align: right;">Facture
+                  </th>
                 </tr>
               </thead>
               <tbody id="billingHistoryBody">
                 <tr>
-                  <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement de
+                  <td colspan="5" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement de
                     l'historique...</td>
                 </tr>
               </tbody>
@@ -785,6 +771,14 @@
           <input type="text" id="pmtCvc" placeholder="123"
             style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
         </div>
+      </div>
+
+      <div style="margin-bottom: 24px;" id="pmtSaveCheckboxContainer">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+          <input type="checkbox" id="pmtSaveCheckbox" checked
+            style="accent-color: var(--accent-primary); width: 16px; height: 16px;">
+          Enregistrer ce moyen de paiement pour de futurs achats
+        </label>
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: flex-end;">

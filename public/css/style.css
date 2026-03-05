@@ -196,6 +196,56 @@ body {
   color: var(--accent-primary);
 }
 
+/* Nav Sublist for Dropdowns */
+.nav-group {
+  margin-bottom: 2px;
+}
+
+.nav-sublist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: none;
+  padding-left: 36px;
+  overflow: hidden;
+}
+
+.nav-group.active .nav-sublist {
+  display: block;
+}
+
+.nav-group .chevron {
+  transition: transform var(--transition-fast);
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+.nav-group.active>.nav-link .chevron {
+  transform: rotate(180deg);
+}
+
+.sub-link {
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  display: block;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  margin-bottom: 2px;
+}
+
+.sub-link:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.sub-link.active {
+  background: var(--accent-primary-bg);
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
 /* Sidebar footer / API key */
 .sidebar-footer {
   padding: 16px;
