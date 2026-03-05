@@ -350,10 +350,14 @@ function initNavigation() {
         toggle.addEventListener('click', (e) => {
             e.preventDefault();
             const group = toggle.closest('.nav-group');
-            if (group) group.classList.toggle('active');
+            const isChevronClick = e.target.closest('.chevron');
 
-            if (toggle.dataset.section) {
-                navigateTo(toggle.dataset.section);
+            if (isChevronClick) {
+                if (group) group.classList.toggle('active');
+            } else {
+                if (toggle.dataset.section) {
+                    navigateTo(toggle.dataset.section);
+                }
             }
         });
     });
@@ -828,18 +832,23 @@ function flattenTree(node, depth = 0) {
 }
 
 // ============ RESEARCH (Step 1) ============
+let isResearching = false;
+
 async function launchResearch() {
+    if (isResearching) return;
+
     const mindmapText = document.getElementById('mindmapInput').value.trim();
     if (!mindmapText) {
         alert('Veuillez d\'abord entrer une mindmap !');
         return;
     }
 
+    isResearching = true;
     const btn = document.getElementById('launchResearch');
     const stopBtn = document.getElementById('stopProcess');
-    btn.disabled = true;
-    btn.innerHTML = '<svg class="spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg> Recherche en cours...';
-    stopBtn.style.display = 'inline-flex';
+    if (btn) btn.disabled = true;
+    if (btn) btn.innerHTML = '<svg class="spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg> Recherche en cours...';
+    if (stopBtn) stopBtn.style.display = 'inline-flex';
 
     const threshold = document.getElementById('relevanceThreshold') ? document.getElementById('relevanceThreshold').value : '30';
     const depth = document.getElementById('depthLevel') ? document.getElementById('depthLevel').value : '4';
@@ -865,9 +874,12 @@ async function launchResearch() {
     } catch (err) {
         alert('Erreur de connexion: ' + err.message);
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg> Lancer la recherche';
-        stopBtn.style.display = 'none';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg> Lancer la recherche';
+        }
+        if (stopBtn) stopBtn.style.display = 'none';
+        isResearching = false;
     }
 }
 

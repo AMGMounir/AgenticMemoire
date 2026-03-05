@@ -132,6 +132,17 @@ class UserStore {
         if (result.changes === 0) throw new Error('User not found');
     }
 
+    addTransaction(userId, type, amount, creditsChanged, description) {
+        const id = uuidv4();
+        const now = new Date().toISOString();
+        this._stmts.insertTransaction.run(id, userId, type, amount, creditsChanged, description, now);
+        return id;
+    }
+
+    getTransactionsByUserId(userId) {
+        return this._stmts.getTransactions.all(userId);
+    }
+
     // Sanitize user object for API responses (strip password_hash)
     sanitize(user) {
         if (!user) return null;

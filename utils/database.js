@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
     credits INTEGER DEFAULT 50,
     is_premium INTEGER DEFAULT 0,
     has_payment_method INTEGER DEFAULT 0,
+    premium_until TEXT,
+    subscription_status TEXT DEFAULT 'inactive',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -99,5 +101,18 @@ db.exec(`
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
 `);
+
+// ============ MIGRATIONS ============
+try {
+    // Check if new columns exist, if not add them
+    const tableInfo = db.pragma('table_info(users)');
+    const hasPremiumUntil = tableInfo.some(col => col.name === 'premium_until');
+    if (!hasPremiumUntil) {
+        db.exec("ALTER TABLE users ADD COLUMN premium_until TEXT");
+        db.exec("ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'inactive'");
+    }
+} catch (e) {
+    console.warn("Migration warning:", e.message);
+}
 
 module.exports = db;

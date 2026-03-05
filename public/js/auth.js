@@ -175,19 +175,15 @@ async function handleGoogleCredential(response) {
 }
 
 function initGoogleAuth() {
-    const googleBtn = document.getElementById('googleAuthBtn');
+    const googleBtn = document.getElementById('googleBtnContainer');
     if (!googleBtn) return;
 
     fetch('/api/auth/config')
         .then(r => r.json())
         .then(config => {
             if (!config.googleClientId || config.googleClientId === 'YOUR_GOOGLE_CLIENT_ID_HERE') {
-                // No Google Client ID configured — hide Google button
-                googleBtn.style.opacity = '0.5';
-                googleBtn.title = 'Google Sign-In non configuré';
-                googleBtn.addEventListener('click', () => {
-                    showError('Google Sign-In non configuré. Ajoutez GOOGLE_CLIENT_ID dans .env');
-                });
+                // No Google Client ID configured
+                googleBtn.innerHTML = '<div style="opacity: 0.5; cursor: not-allowed; width: 100%; text-align: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;">Google Sign-In non configuré</div>';
                 return;
             }
 
@@ -198,29 +194,17 @@ function initGoogleAuth() {
                     callback: handleGoogleCredential
                 });
 
-                googleBtn.addEventListener('click', () => {
-                    google.accounts.id.prompt();
-                });
+                google.accounts.id.renderButton(
+                    googleBtn,
+                    { theme: "outline", size: "large", width: 340 }
+                );
             } else {
-                // Google library not loaded yet — retry
-                googleBtn.addEventListener('click', () => {
-                    if (typeof google !== 'undefined' && google.accounts) {
-                        google.accounts.id.initialize({
-                            client_id: config.googleClientId,
-                            callback: handleGoogleCredential
-                        });
-                        google.accounts.id.prompt();
-                    } else {
-                        showError('Bibliothèque Google non chargée. Rafraîchissez la page.');
-                    }
-                });
+                // Google library not loaded
+                googleBtn.innerHTML = '<div style="color: var(--color-danger); text-align: center;">Bibliothèque Google non chargée</div>';
             }
         })
         .catch(() => {
-            googleBtn.style.opacity = '0.5';
-            googleBtn.addEventListener('click', () => {
-                showError('Impossible de charger la configuration d\'authentification');
-            });
+            googleBtn.innerHTML = '<div style="opacity: 0.5; width: 100%; text-align: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;">Erreur de configuration Google</div>';
         });
 }
 
