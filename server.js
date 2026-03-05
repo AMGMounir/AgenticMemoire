@@ -6,6 +6,9 @@ const fs = require('fs');
 const session = require('express-session');
 const { OAuth2Client } = require('google-auth-library');
 const multer = require('multer');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2023-10-16'
+});
 
 const { parseMindmap } = require('./utils/mindmapParser');
 const { SourceStore } = require('./utils/sourceStore');
@@ -41,7 +44,14 @@ const avatarUpload = multer({
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+    limit: '10mb',
+    verify: (req, res, buf) => {
+        if (req.originalUrl.startsWith('/api/webhooks/stripe')) {
+            req.rawBody = buf.toString();
+        }
+    }
+}));
 app.use(session({
     secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
     resave: false,
@@ -489,44 +499,215 @@ app.get('/api/memoir/:projectId', (req, res) => {
 
 // ============ BILLING API ============
 
-app.post('/api/billing/buy-credits', (req, res) => {
+// Helper to get or create a Stripe Customer
+async function getOrCreateStripeCustomer(userId) {
+    const user = userStore.findById(userId);
+    if (!user) throw new Error("Utilisateur introuvable");
+
+    if (user.stripe_customer_id) {
+        return user.stripe_customer_id;
+    }
+
+    const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.username,
+        metadata: { userId: user.id }
+    });
+
+    userStore.setStripeCustomerId(userId, customer.id);
+    return customer.id;
+}
+
+
+app.post('/api/billing/buy-credits', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
-        const { packageId } = req.body; // 'small' or 'large'
+        const { packageId, saveCard } = req.body; // 'small' or 'large'
 
-        let amount = 0;
-        if (packageId === 'small') amount = 100;
-        else if (packageId === 'large') amount = 500;
+        let amountInCents = 0;
+        let credits = 0;
+        if (packageId === 'small') { amountInCents = 99; credits = 100; }
+        else if (packageId === 'large') { amountInCents = 399; credits = 500; }
         else return res.status(400).json({ error: 'Forfait invalide' });
 
-        const user = userStore.addCredits(req.session.userId, amount);
-        userStore.addTransaction(req.session.userId, 'purchase', packageId === 'small' ? 0.99 : 3.99, amount, `Achat de ${amount} crédits (Pack ${packageId})`);
+        const customerId = await getOrCreateStripeCustomer(req.session.userId);
 
-        res.json({ success: true, message: `${amount} crédits ajoutés avec succès !`, data: userStore.sanitize(user) });
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: amountInCents,
+            currency: 'usd',
+            customer: customerId,
+            setup_future_usage: saveCard ? 'off_session' : undefined,
+            metadata: {
+                type: 'credits',
+                credits: credits.toString(),
+                packageId,
+                userId: req.session.userId
+            }
+        });
+
+        res.json({ success: true, clientSecret: paymentIntent.client_secret });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/billing/subscribe-premium', (req, res) => {
+app.post('/api/billing/subscribe-premium', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
 
-        const user = userStore.setPremium(req.session.userId, true);
-        userStore.addTransaction(req.session.userId, 'subscription', 2.99, 0, 'Abonnement au Forfait Premium (1 mois)');
+        const customerId = await getOrCreateStripeCustomer(req.session.userId);
 
-        res.json({ success: true, message: 'Bienvenue dans le forfait Premium !', data: userStore.sanitize(user) });
+        // We need a Price ID for subscriptions. We'll use a dynamic price for simplicity,
+        // but normally you create a Product/Price in Stripe Dashboard and hardcode the Price ID.
+        // For testing, creating inline:
+        const product = await stripe.products.create({ name: 'Forfait Premium ProjetBreda' });
+        const price = await stripe.prices.create({
+            product: product.id,
+            unit_amount: 299,
+            currency: 'usd',
+            recurring: { interval: 'month' },
+        });
+
+        // Create the subscription. Note: we set payment_behavior to 'default_incomplete'
+        // so it returns a PaymentIntent client_secret to collect the card.
+        const subscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: price.id }],
+            payment_behavior: 'default_incomplete',
+            payment_settings: { save_default_payment_method: 'on_subscription' },
+            expand: ['latest_invoice.payment_intent'],
+            metadata: { type: 'premium', userId: req.session.userId }
+        });
+
+        // Safeguard to reliably get the PaymentIntent client_secret
+        let paymentIntent = null;
+        let latestInvoice = subscription.latest_invoice;
+
+        console.log(`[Stripe Debug] Subscription created:`, subscription.id, 'Status:', subscription.status);
+
+        if (typeof latestInvoice === 'string') {
+            console.log(`[Stripe Debug] latest_invoice is a string ID:`, latestInvoice);
+            try {
+                latestInvoice = await stripe.invoices.retrieve(latestInvoice);
+                console.log(`[Stripe Debug] Retrieved invoice total:`, latestInvoice.total, 'amount_due:', latestInvoice.amount_due, 'payment_intent:', latestInvoice.payment_intent);
+            } catch (err) {
+                console.log(`[Stripe Debug] Error retrieving invoice:`, err.message);
+            }
+        } else if (latestInvoice) {
+            console.log(`[Stripe Debug] latest_invoice is an object. payment_intent:`, latestInvoice.payment_intent);
+        } else {
+            console.log(`[Stripe Debug] latest_invoice is null or undefined!`);
+        }
+
+        if (latestInvoice && latestInvoice.payment_intent) {
+            if (typeof latestInvoice.payment_intent === 'string') {
+                paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent);
+            } else {
+                paymentIntent = latestInvoice.payment_intent;
+            }
+        }
+
+        if (!paymentIntent || !paymentIntent.client_secret) {
+            if (subscription.status === 'active') {
+                return res.json({
+                    success: true,
+                    subscriptionId: subscription.id,
+                    status: 'active'
+                });
+            }
+            throw new Error('Impossible de générer le PaymentIntent pour cet abonnement.');
+        }
+
+        res.json({
+            success: true,
+            subscriptionId: subscription.id,
+            clientSecret: paymentIntent.client_secret,
+            status: subscription.status
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/billing/cancel-premium', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const userId = req.session.userId;
+        const user = userStore.findById(userId);
+
+        if (!user || (!user.is_premium && user.subscription_status !== 'active')) {
+            return res.status(400).json({ error: "Vous n'êtes pas abonné au Premium." });
+        }
+
+        if (user.stripe_customer_id) {
+            // Find the active subscription for this customer
+            const subscriptions = await stripe.subscriptions.list({
+                customer: user.stripe_customer_id,
+                status: 'active',
+                limit: 1
+            });
+
+            if (subscriptions.data.length > 0) {
+                const subId = subscriptions.data[0].id;
+                // Set to cancel at period end so they don't lose time they paid for
+                await stripe.subscriptions.update(subId, {
+                    cancel_at_period_end: true
+                });
+            }
+        }
+
+        // Update local database to 'canceling' (or false if premium_until applies soon)
+        const updatedUser = userStore.cancelPremium(userId);
+        res.json({ success: true, message: 'Forfait Premium annulé. Vous conservez vos avantages jusqu\'à la fin de la période.', data: userStore.sanitize(updatedUser) });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/billing/cancel-premium', (req, res) => {
+app.post('/api/billing/confirm-subscription', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
 
-        const user = userStore.setPremium(req.session.userId, false);
-        res.json({ success: true, message: 'Forfait Premium annulé.', data: userStore.sanitize(user) });
+        const { subscriptionId } = req.body;
+        if (!subscriptionId) return res.status(400).json({ error: 'Subscription ID is required' });
+
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+        // Verify it belongs to the user and is active
+        if (subscription.metadata.userId !== req.session.userId) {
+            return res.status(403).json({ error: 'Non autorisé' });
+        }
+
+        if (subscription.status === 'active') {
+            const user = userStore.findById(req.session.userId);
+            // Only update if not already premium to prevent duplicate transactions
+            if (!user.is_premium) {
+                userStore.setPremium(req.session.userId, true);
+                userStore.addTransaction(req.session.userId, 'subscription', 2.99, 0, 'Abonnement Premium (Stripe - Confirmé)');
+            }
+            return res.json({ success: true, data: userStore.sanitize(userStore.findById(req.session.userId)) });
+        } else {
+            return res.status(400).json({ error: 'Paiement non finalisé' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/billing/customer-portal', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const customerId = await getOrCreateStripeCustomer(req.session.userId);
+
+        const session = await stripe.billingPortal.sessions.create({
+            customer: customerId,
+            return_url: `http://localhost:${PORT}/`,
+        });
+
+        res.json({ success: true, url: session.url });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -563,6 +744,55 @@ app.delete('/api/billing/payment-method', (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// ============ STRIPE WEBHOOKS ============
+
+app.post('/api/webhooks/stripe', async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        // Stripe requires the raw body to verify the signature
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error(`⚠️  Webhook signature verification failed.`, err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+        // Handle the event
+        if (event.type === 'payment_intent.succeeded') {
+            const paymentIntent = event.data.object;
+            const metadata = paymentIntent.metadata || {};
+            const userId = metadata.userId;
+
+            if (userId && metadata.type === 'credits') {
+                const credits = parseInt(metadata.credits, 10);
+                const amountInDollars = paymentIntent.amount_received / 100;
+                userStore.addCredits(userId, credits);
+                userStore.addTransaction(userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`);
+            }
+        } else if (event.type === 'invoice.payment_succeeded') {
+            const invoice = event.data.object;
+            // Subscription invoices have the subscription ID
+            if (invoice.subscription) {
+                const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+                const metadata = subscription.metadata || {};
+                const userId = metadata.userId;
+
+                if (userId && metadata.type === 'premium') {
+                    userStore.setPremium(userId, true);
+                    const amountInDollars = invoice.amount_paid / 100;
+                    userStore.addTransaction(userId, 'subscription', amountInDollars, 0, 'Abonnement Premium (Stripe)');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Erreur de traitement du webhook Stripe:', err);
+    }
+
+    res.json({ received: true });
 });
 
 // ============ SERVE FRONTEND ============

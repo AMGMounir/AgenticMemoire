@@ -288,7 +288,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <polygon points="5 3 19 12 5 21 5 3" />
             </svg>
-            Lancer la synthèse
+            Lancer la synthèse <span
+              style="font-size: 0.8em; margin-left: 6px; padding: 2px 6px; background: rgba(0,0,0,0.2); border-radius: 4px;">—
+              10 Crédits</span>
           </button>
         </div>
       </div>
@@ -475,7 +477,7 @@
           </div>
           <div class="pipeline-info">
             <h3>Agent de Structuration</h3>
-            <p>Génération du plan de mémoire doctoral</p>
+            <p>Génération du plan de mémoire</p>
           </div>
           <div class="pipeline-status">
             <span class="status-badge idle">En attente</span>
@@ -646,50 +648,21 @@
     <section class="content-section" id="section-billing-paiement">
       <div class="section-header">
         <h1>Moyens de Paiement</h1>
-        <p class="section-subtitle">Gérez vos cartes bancaires et comptes pour vos futurs achats.</p>
+        <p class="section-subtitle">Gérez vos cartes bancaires et comptes pour vos futurs achats via notre plateforme
+          sécurisée Stripe.</p>
       </div>
 
       <div class="card" style="max-width: 600px;">
         <div class="card-header" style="justify-content: space-between; display: flex;">
-          <h2>Mes moyens de paiement</h2>
-        </div>
-        <div class="card-body" id="paymentMethodsContainer">
-          <!-- Will be filled by JS dynamically based on currentUser.has_payment_method -->
-          <div class="empty-state">
-            <p>Chargement...</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Add Payment Form directly inside the section -->
-      <div class="card" style="max-width: 600px; margin-top: 20px;" id="addPaymentFormContainer">
-        <div class="card-header">
-          <h2>Ajouter un moyen de paiement</h2>
+          <h2>Portail de facturation</h2>
         </div>
         <div class="card-body">
-          <p style="color: var(--text-secondary); margin-bottom: 20px;">Veuillez ajouter une carte bancaire pour pouvoir
-            effectuer des achats.</p>
-          <div style="margin-bottom: 20px;">
-            <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">Numéro de carte</label>
-            <input type="text" id="inlinePmtCard" placeholder="XXXX XXXX XXXX XXXX"
-              style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-          </div>
-          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <div style="flex: 1;">
-              <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">Expiration</label>
-              <input type="text" id="inlinePmtExp" placeholder="MM/AA"
-                style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-            </div>
-            <div style="flex: 1;">
-              <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">CVC</label>
-              <input type="text" id="inlinePmtCvc" placeholder="123"
-                style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-            </div>
-          </div>
-          <div style="text-align: right;">
-            <button class="btn btn-primary" id="inlinePaymentSaveBtn" style="min-width: 150px;">Enregistrer la
-              carte</button>
-          </div>
+          <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            Afin de garantir la sécurité maximale de vos données de paiement, toutes les transactions et les moyens de
+            paiement sont gérés par Stripe.
+          </p>
+          <button class="btn btn-primary" id="btnStripePortal" style="width: 100%; text-align: center;">Accéder au
+            portail Stripe sécurisé</button>
         </div>
       </div>
     </section>
@@ -759,27 +732,17 @@
   <div class="modal-overlay" id="paymentModal"
     style="display:none; align-items:center; justify-content:center; z-index:10000;">
     <div class="modal-card" style="max-width: 400px; padding: 30px;">
-      <h2 style="margin-bottom: 15px; font-size: 1.25rem;">Moyen de paiement</h2>
-      <p style="color: var(--text-secondary); margin-bottom: 20px;">Veuillez ajouter une carte bancaire pour pouvoir
-        effectuer des achats.</p>
+      <h2 style="margin-bottom: 15px; font-size: 1.25rem;">Moyen de paiement sécurisé</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 20px;">Veuillez entrer les détails de votre carte bancaire.
+      </p>
 
       <div style="margin-bottom: 20px;">
-        <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">Numéro de carte</label>
-        <input type="text" id="pmtCard" placeholder="XXXX XXXX XXXX XXXX"
-          style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-      </div>
-
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <div style="flex: 1;">
-          <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">Expiration</label>
-          <input type="text" id="pmtExp" placeholder="MM/AA"
-            style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+        <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">Carte de crédit</label>
+        <!-- Stripe Elements Placeholder -->
+        <div id="card-element"
+          style="padding: 12px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px;">
         </div>
-        <div style="flex: 1;">
-          <label style="display:block; margin-bottom: 8px; font-size: 0.9rem;">CVC</label>
-          <input type="text" id="pmtCvc" placeholder="123"
-            style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
-        </div>
+        <div id="card-errors" role="alert" style="color: #ff4d4f; font-size: 0.85rem; margin-top: 8px;"></div>
       </div>
 
       <div style="margin-bottom: 24px;" id="pmtSaveCheckboxContainer">
@@ -800,6 +763,8 @@
   <!-- Toast Notification Container -->
   <div id="toastContainer" class="toast-container"></div>
 
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://js.stripe.com/v3/"></script>
   <script src="/js/auth.js"></script>
   <script src="/js/app.js?v=4"></script>
 </body>

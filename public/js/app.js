@@ -85,10 +85,19 @@ function loadUserProfile(user) {
 
     if (billingPlan) {
         if (user.is_premium) {
-            billingPlan.textContent = 'Premium';
-            billingPlan.style.color = 'var(--text-primary)';
-            if (subscribeBtn) subscribeBtn.style.display = 'none';
-            if (cancelBtn) cancelBtn.style.display = 'block';
+            if (user.subscription_status === 'canceling' && user.premium_until) {
+                const dateObj = new Date(user.premium_until);
+                const dateStr = dateObj.toLocaleDateString('fr-FR');
+                billingPlan.textContent = `Premium (Annulé, accès jusqu'au ${dateStr})`;
+                billingPlan.style.color = 'var(--text-secondary)';
+                if (subscribeBtn) subscribeBtn.style.display = 'none'; // They can't resubscribe until it expires in this flow
+                if (cancelBtn) cancelBtn.style.display = 'none';
+            } else {
+                billingPlan.textContent = 'Premium';
+                billingPlan.style.color = 'var(--text-primary)';
+                if (subscribeBtn) subscribeBtn.style.display = 'none';
+                if (cancelBtn) cancelBtn.style.display = 'block';
+            }
         } else {
             billingPlan.textContent = 'Standard';
             billingPlan.style.color = 'var(--text-secondary)';
@@ -440,88 +449,189 @@ function requirePaymentMethod(onSuccess, isSubscription = false) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Payment Modal setup (Popup)
-    const pmtModal = document.getElementById('paymentModal');
-    const pmtCancel = document.getElementById('paymentCancelBtn');
-    const pmtSave = document.getElementById('paymentSaveBtn');
+// ================= BILLING & STRIPE ELEMENTS =================
+let stripeInstance = null;
+let cardElement = null;
 
-    if (pmtCancel) {
-        pmtCancel.addEventListener('click', () => {
-            if (pmtModal) pmtModal.style.display = 'none';
-            pendingPaymentCallback = null;
+// Initialize Stripe purely for Elements UI
+async function initStripe() {
+    if (!stripeInstance && window.Stripe) {
+        // NOTE: Uses the test key. Ensure it matches the env!
+        stripeInstance = Stripe('pk_test_51RilPFRjkqpNHiEOZtlFx8ZvJqLfSqOFE6sACnILzctltb6JFupdtFu75DBkFVlCyilBIUBezyUl74xSjoBsU0s200jCZ3yTfS');
+        const elements = stripeInstance.elements();
+
+        cardElement = elements.create('card', {
+            style: {
+                base: {
+                    color: '#e0dcf8', // text-primary approx
+                    fontFamily: 'monospace',
+                    fontSmoothing: 'antialiased',
+                    fontSize: '16px',
+                    '::placeholder': { color: '#888' }
+                },
+                invalid: {
+                    color: '#ff4d4f',
+                    iconColor: '#ff4d4f'
+                }
+            }
+        });
+
+        cardElement.mount('#card-element');
+
+        cardElement.on('change', function (event) {
+            const displayError = document.getElementById('card-errors');
+            if (event.error) {
+                displayError.textContent = event.error.message;
+            } else {
+                displayError.textContent = '';
+            }
         });
     }
+}
 
-    if (pmtSave) {
-        pmtSave.addEventListener('click', async () => {
-            const cardInput = document.getElementById('pmtCard');
-            if (cardInput && !cardInput.value.trim()) {
-                showToast('Veuillez entrer un numéro de carte.', 'error');
+// Ensure it runs on load
+document.addEventListener('DOMContentLoaded', initStripe);
+
+let currentPaymentContext = null; // 'credits' | 'premium'
+let currentPaymentData = null; // { packageId } etc
+
+function openPaymentModal(context, data = null) {
+    currentPaymentContext = context;
+    currentPaymentData = data;
+
+    const modal = document.getElementById('paymentModal');
+    const saveContainer = document.getElementById('pmtSaveCheckboxContainer');
+    const saveCheckbox = document.getElementById('pmtSaveCheckbox');
+
+    // Reset errors
+    const errorDiv = document.getElementById('card-errors');
+    if (errorDiv) errorDiv.textContent = '';
+
+    if (context === 'premium') {
+        saveContainer.style.display = 'none';
+        saveCheckbox.checked = true; // Subscriptions always save cards
+    } else {
+        saveContainer.style.display = 'block';
+        saveCheckbox.checked = true; // Default intent
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    if (modal) modal.style.display = 'none';
+    currentPaymentContext = null;
+    currentPaymentData = null;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const pmtCancelBtn = document.getElementById('paymentCancelBtn');
+    if (pmtCancelBtn) {
+        pmtCancelBtn.addEventListener('click', closePaymentModal);
+    }
+
+    const pmtSaveBtn = document.getElementById('paymentSaveBtn');
+    if (pmtSaveBtn) {
+        pmtSaveBtn.addEventListener('click', async () => {
+            if (!stripeInstance || !cardElement) {
+                showToast('Stripe n\'est pas initialisé', 'error');
                 return;
             }
 
-            const checkbox = document.getElementById('pmtSaveCheckbox');
-            const shouldSave = checkbox ? checkbox.checked : true;
+            const oldText = pmtSaveBtn.textContent;
+            pmtSaveBtn.textContent = 'Traitement...';
+            pmtSaveBtn.disabled = true;
 
             try {
-                if (shouldSave) {
-                    const res = await apiPost('/api/billing/payment-method', {});
-                    if (res.success) {
-                        currentUser = res.data;
-                        loadUserProfile(currentUser);
-                        showToast('Moyen de paiement enregistré', 'success');
-                        loadPaymentMethods();
+                if (currentPaymentContext === 'credits') {
+                    const packageId = currentPaymentData.packageId;
+                    const saveCard = document.getElementById('pmtSaveCheckbox').checked;
 
-                        if (pmtModal) pmtModal.style.display = 'none';
-                        if (pendingPaymentCallback) {
-                            pendingPaymentCallback();
-                            pendingPaymentCallback = null;
-                        }
-                    } else {
-                        showToast(res.error || 'Erreur d\'enregistrement', 'error');
+                    // 1. Ask backend for PaymentIntent clientSecret
+                    const res = await apiPost('/api/billing/buy-credits', { packageId, saveCard });
+                    if (!res.success || !res.clientSecret) {
+                        throw new Error(res.error || 'Erreur lors de la création du paiement');
                     }
-                } else {
-                    // One-time payment, don't save.
-                    if (pmtModal) pmtModal.style.display = 'none';
-                    if (pendingPaymentCallback) {
-                        pendingPaymentCallback();
-                        pendingPaymentCallback = null;
+
+                    // 2. Confirm the payment with Stripe Elements
+                    const { paymentIntent, error } = await stripeInstance.confirmCardPayment(res.clientSecret, {
+                        payment_method: { card: cardElement }
+                    });
+
+                    if (error) {
+                        document.getElementById('card-errors').textContent = error.message;
+                    } else if (paymentIntent.status === 'succeeded') {
+                        showToast('Achat réussi !', 'success');
+                        closePaymentModal();
+                        setTimeout(loadTransactionHistory, 2000); // give webhook time
+                    }
+
+                } else if (currentPaymentContext === 'premium') {
+                    // 1. Ask backend to create Subscription and return incomplete PaymentIntent secret
+                    const res = await apiPost('/api/billing/subscribe-premium');
+                    if (!res.success) {
+                        throw new Error(res.error || 'Erreur lors de l\'abonnement');
+                    }
+
+                    if (res.status === 'active' && !res.clientSecret) {
+                        showToast('Abonnement Premium activé !', 'success');
+                        closePaymentModal();
+
+                        // Optimistic update for UI state
+                        currentUser.is_premium = 1;
+                        currentUser.subscription_status = 'active';
+                        loadUserProfile(currentUser);
+                        return;
+                    }
+
+                    if (!res.clientSecret) {
+                        throw new Error('Impossible de procéder au paiement.');
+                    }
+
+                    // 2. Confirm the card for the subscription
+                    const { paymentIntent, error } = await stripeInstance.confirmCardPayment(res.clientSecret, {
+                        payment_method: { card: cardElement }
+                    });
+
+                    if (error) {
+                        document.getElementById('card-errors').textContent = error.message;
+                    } else if (paymentIntent.status === 'succeeded') {
+                        // Synchronously confirm with backend instead of relying entirely on webhook to avoid race conditions
+                        const confirmRes = await apiPost('/api/billing/confirm-subscription', {
+                            subscriptionId: res.subscriptionId
+                        });
+
+                        if (confirmRes.success) {
+                            showToast('Abonnement Premium activé !', 'success');
+                            closePaymentModal();
+
+                            currentUser = confirmRes.data;
+                            loadUserProfile(currentUser);
+                        } else {
+                            showToast(confirmRes.error || 'Erreur lors de la validation.', 'error');
+                        }
                     }
                 }
             } catch (err) {
-                showToast('Erreur réseau', 'error');
+                showToast(err.message || 'Erreur réseau', 'error');
+            } finally {
+                pmtSaveBtn.textContent = oldText;
+                pmtSaveBtn.disabled = false;
             }
         });
     }
 
-    // Payment Form setup (Inline view in Paiement)
-    const inlinePmtSave = document.getElementById('inlinePaymentSaveBtn');
-
-    if (inlinePmtSave) {
-        inlinePmtSave.addEventListener('click', async () => {
-            const cardInput = document.getElementById('inlinePmtCard');
-            if (!cardInput.value.trim()) {
-                showToast('Veuillez entrer un numéro de carte.', 'error');
-                return;
-            }
-
+    // Stripe Customer Portal
+    const portalBtn = document.getElementById('btnStripePortal');
+    if (portalBtn) {
+        portalBtn.addEventListener('click', async () => {
             try {
-                // In a real app we would stripe tokenize here. For now we mock it.
-                const res = await apiPost('/api/billing/payment-method', {});
-                if (res.success) {
-                    currentUser = res.data;
-                    loadUserProfile(currentUser);
-                    showToast('Moyen de paiement enregistré', 'success');
-
-                    // Clear fields
-                    cardInput.value = '';
-                    document.getElementById('inlinePmtExp').value = '';
-                    document.getElementById('inlinePmtCvc').value = '';
-
-                    loadPaymentMethods();
+                const res = await apiPost('/api/billing/customer-portal');
+                if (res.success && res.url) {
+                    window.location.href = res.url;
                 } else {
-                    showToast(res.error || 'Erreur d\'enregistrement', 'error');
+                    showToast(res.error || 'Erreur d\'accès au portail', 'error');
                 }
             } catch (err) {
                 showToast('Erreur réseau', 'error');
@@ -532,29 +642,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const subBtn = document.getElementById('btnSubscribePremium');
     if (subBtn) {
         subBtn.addEventListener('click', () => {
-            requirePaymentMethod(() => {
-                showConfirmModal('Souscrire au Premium', 'Confirmez-vous l\'abonnement Premium pour 2.99$/mois ?', async () => {
-                    try {
-                        const res = await apiPost('/api/billing/subscribe-premium');
-                        if (res.success) {
-                            currentUser = res.data;
-                            loadUserProfile(currentUser);
-                            showToast(res.message, 'success');
-                        } else {
-                            showToast(res.error || 'Erreur', 'error');
-                        }
-                    } catch (err) {
-                        showToast('Erreur réseau', 'error');
-                    }
-                }, 'Souscrire', false);
-            }, true); // force Subscription context
+            if (currentUser && currentUser.is_premium && currentUser.subscription_status === 'active') {
+                showToast('Vous êtes déjà abonné !', 'info');
+                return;
+            }
+            openPaymentModal('premium');
         });
     }
 
     const cancelBtn = document.getElementById('btnCancelPremium');
     if (cancelBtn) {
         cancelBtn.addEventListener('click', () => {
-            showConfirmModal('Annuler l\'abonnement', 'Êtes-vous sûr de vouloir annuler votre abonnement Premium ?', async () => {
+            showConfirmModal('Annuler l\'abonnement', 'Êtes-vous sûr de vouloir annuler votre abonnement Premium ? Vous conserverez vos avantages jusqu\'à la fin de la période en cours.', async () => {
                 try {
                     const res = await apiPost('/api/billing/cancel-premium');
                     if (res.success) {
@@ -573,23 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function buyCredits(packageId) {
-    requirePaymentMethod(() => {
-        showConfirmModal('Acheter des crédits', `Confirmez-vous l'achat du pack ${packageId === 'small' ? 'Découverte (0.99$)' : 'Étudiant (3.99$)'} ?`, async () => {
-            try {
-                const res = await apiPost('/api/billing/buy-credits', { packageId });
-                if (res.success) {
-                    currentUser = res.data;
-                    loadUserProfile(currentUser);
-                    showToast(res.message, 'success');
-                    loadTransactionHistory();
-                } else {
-                    showToast(res.error || 'Erreur lors de l\'achat', 'error');
-                }
-            } catch (err) {
-                showToast('Erreur réseau', 'error');
-            }
-        }, 'Acheter', false);
-    });
+    if (!currentUser) return;
+    openPaymentModal('credits', { packageId });
 }
 
 async function loadTransactionHistory() {

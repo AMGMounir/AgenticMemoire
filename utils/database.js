@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     has_payment_method INTEGER DEFAULT 0,
     premium_until TEXT,
     subscription_status TEXT DEFAULT 'inactive',
+    stripe_customer_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -110,6 +111,10 @@ try {
     if (!hasPremiumUntil) {
         db.exec("ALTER TABLE users ADD COLUMN premium_until TEXT");
         db.exec("ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'inactive'");
+    }
+    const hasStripeCust = tableInfo.some(col => col.name === 'stripe_customer_id');
+    if (!hasStripeCust) {
+        db.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
     }
 } catch (e) {
     console.warn("Migration warning:", e.message);

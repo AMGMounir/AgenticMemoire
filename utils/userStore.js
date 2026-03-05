@@ -28,7 +28,10 @@ class UserStore {
                 UPDATE users SET credits = credits + ?, updated_at = ? WHERE id = ?
             `),
             setPremium: db.prepare(`
-                UPDATE users SET is_premium = ?, updated_at = ? WHERE id = ?
+                UPDATE users SET is_premium = ?, premium_until = ?, subscription_status = ?, updated_at = ? WHERE id = ?
+            `),
+            cancelPremium: db.prepare(`
+                UPDATE users SET subscription_status = 'canceling', updated_at = ? WHERE id = ?
             `),
             updatePaymentMethod: db.prepare(`
                 UPDATE users SET has_payment_method = ?, updated_at = ? WHERE id = ?
@@ -43,16 +46,32 @@ class UserStore {
         };
     }
 
+    _evaluatePremium(user) {
+        if (!user) return null;
+        if (user.is_premium === 1 && user.premium_until) {
+            if (new Date() > new Date(user.premium_until)) {
+                // Expired!
+                user.is_premium = 0;
+                user.subscription_status = 'expired';
+                // Technically we should update DB here to be completely correct, 
+                // but doing it in memory is enough to gate access.
+                const now = new Date().toISOString();
+                db.prepare("UPDATE users SET is_premium = 0, subscription_status = 'expired', updated_at = ? WHERE id = ?").run(now, user.id);
+            }
+        }
+        return user;
+    }
+
     findById(userId) {
-        return this._stmts.findById.get(userId) || null;
+        return this._evaluatePremium(this._stmts.findById.get(userId) || null);
     }
 
     findByGoogleId(googleId) {
-        return this._stmts.findByGoogleId.get(googleId) || null;
+        return this._evaluatePremium(this._stmts.findByGoogleId.get(googleId) || null);
     }
 
     findByEmail(email) {
-        return this._stmts.findByEmail.get(email.toLowerCase()) || null;
+        return this._evaluatePremium(this._stmts.findByEmail.get(email.toLowerCase()) || null);
     }
 
     createFromGoogle(profile) {
@@ -117,13 +136,34 @@ class UserStore {
 
     setPremium(userId, isPremium) {
         const now = new Date().toISOString();
-        this._stmts.setPremium.run(isPremium ? 1 : 0, now, userId);
+        let premiumUntil = null;
+        let subStatus = 'inactive';
+        if (isPremium) {
+            const nextMonth = new Date();
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            premiumUntil = nextMonth.toISOString();
+            subStatus = 'active';
+        }
+        this._stmts.setPremium.run(isPremium ? 1 : 0, premiumUntil, subStatus, now, userId);
+        return this.findById(userId);
+    }
+
+    cancelPremium(userId) {
+        const now = new Date().toISOString();
+        this._stmts.cancelPremium.run(now, userId);
         return this.findById(userId);
     }
 
     updatePaymentMethod(userId, hasMethod) {
         const now = new Date().toISOString();
         this._stmts.updatePaymentMethod.run(hasMethod ? 1 : 0, now, userId);
+        return this.findById(userId);
+    }
+
+    setStripeCustomerId(userId, stripeCustomerId) {
+        const now = new Date().toISOString();
+        // Dynamic prepare is fine here since it's a one-off update not defined in constructor
+        db.prepare('UPDATE users SET stripe_customer_id = ?, updated_at = ? WHERE id = ?').run(stripeCustomerId, now, userId);
         return this.findById(userId);
     }
 
