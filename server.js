@@ -685,12 +685,102 @@ app.post('/api/billing/confirm-subscription', async (req, res) => {
             // Only update if not already premium to prevent duplicate transactions
             if (!user.is_premium) {
                 userStore.setPremium(req.session.userId, true);
-                userStore.addTransaction(req.session.userId, 'subscription', 2.99, 0, 'Abonnement Premium (Stripe - Confirmé)');
+                // Fetch the latest invoice to get receipt URL
+                let receiptUrl = null;
+                try {
+                    const invoices = await stripe.invoices.list({ subscription: subscriptionId, limit: 1 });
+                    if (invoices.data.length > 0 && invoices.data[0].invoice_pdf) {
+                        receiptUrl = invoices.data[0].invoice_pdf;
+                    }
+                } catch (e) { /* ignore */ }
+                userStore.addTransaction(req.session.userId, 'subscription', 2.99, 0, 'Abonnement Premium (Stripe)', receiptUrl);
             }
             return res.json({ success: true, data: userStore.sanitize(userStore.findById(req.session.userId)) });
         } else {
             return res.status(400).json({ error: 'Paiement non finalisé' });
         }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/billing/stripe-payment-methods', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.findById(req.session.userId);
+        if (!user || !user.stripe_customer_id) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const paymentMethods = await stripe.paymentMethods.list({
+            customer: user.stripe_customer_id,
+            type: 'card',
+        });
+
+        const cards = paymentMethods.data.map(pm => ({
+            id: pm.id,
+            brand: pm.card.brand,
+            last4: pm.card.last4,
+            exp_month: pm.card.exp_month,
+            exp_year: pm.card.exp_year,
+        }));
+
+        res.json({ success: true, data: cards });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete a Stripe payment method
+app.delete('/api/billing/stripe-payment-methods/:pmId', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const { pmId } = req.params;
+        const user = userStore.findById(req.session.userId);
+
+        // Verify the payment method belongs to this customer
+        const pm = await stripe.paymentMethods.retrieve(pmId);
+        if (pm.customer !== user.stripe_customer_id) {
+            return res.status(403).json({ error: 'Non autorisé' });
+        }
+
+        await stripe.paymentMethods.detach(pmId);
+        res.json({ success: true, message: 'Carte supprimée avec succès.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Fetch real Stripe invoices for the user
+app.get('/api/billing/invoices', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
+
+        const user = userStore.findById(req.session.userId);
+        if (!user || !user.stripe_customer_id) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const invoices = await stripe.invoices.list({
+            customer: user.stripe_customer_id,
+            limit: 20,
+        });
+
+        const data = invoices.data.map(inv => ({
+            id: inv.id,
+            number: inv.number,
+            amount: inv.amount_paid / 100,
+            currency: inv.currency,
+            status: inv.status,
+            description: inv.lines.data.map(l => l.description).join(', '),
+            created: new Date(inv.created * 1000).toISOString(),
+            invoice_pdf: inv.invoice_pdf,
+            hosted_invoice_url: inv.hosted_invoice_url,
+        }));
+
+        res.json({ success: true, data });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -699,7 +699,9 @@ async function loadTransactionHistory() {
                 const amountText = t.amount > 0 ? `${t.amount.toFixed(2)}$` : '—';
                 const creditColor = t.credits_changed > 0 ? 'var(--color-success)' : (t.credits_changed < 0 ? 'var(--color-danger)' : 'var(--text-secondary)');
                 const creditPrefix = t.credits_changed > 0 ? '+' : '';
-                const receiptButton = t.amount > 0 ? `<button class="btn btn-secondary btn-sm" onclick="showToast('Facture #${t.id} téléchargée.', 'success')">PDF</button>` : '—';
+                const receiptButton = t.receipt_url
+                    ? `<a href="${t.receipt_url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">PDF</a>`
+                    : (t.amount > 0 ? `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5; cursor: not-allowed;">PDF</button>` : '—');
 
                 return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
                     <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
@@ -717,41 +719,77 @@ async function loadTransactionHistory() {
     }
 }
 
-function loadPaymentMethods() {
-    const container = document.getElementById('paymentMethodsContainer');
+async function loadPaymentMethods() {
+    const container = document.getElementById('stripeCardsContainer');
     if (!container) return;
 
-    if (currentUser && currentUser.has_payment_method) {
-        container.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-tertiary);">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="background: var(--bg-secondary); padding: 8px; border-radius: 4px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2" width="24" height="24">
-                            <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
-                            <line x1="2" y1="10" x2="22" y2="10" />
-                        </svg>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-primary);">Visa terminant par **** 4242</div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Expire 12/28</div>
+    container.innerHTML = '<p style="color: var(--text-secondary); padding: 10px;">Chargement des moyens de paiement...</p>';
+
+    try {
+        const res = await apiGet('/api/billing/stripe-payment-methods');
+
+        if (res.success && res.data.length > 0) {
+            container.innerHTML = `
+                <div class="card">
+                    <div class="card-header"><h2>Cartes enregistrées</h2></div>
+                    <div class="card-body" style="padding: 0;">
+                        ${res.data.map(card => {
+                const brandName = card.brand.charAt(0).toUpperCase() + card.brand.slice(1);
+                return `
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color);">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="background: var(--bg-secondary); padding: 8px; border-radius: 4px;">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2" width="24" height="24">
+                                            <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
+                                            <line x1="2" y1="10" x2="22" y2="10" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--text-primary);">${brandName} terminant par •••• ${card.last4}</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Expire ${String(card.exp_month).padStart(2, '0')}/${card.exp_year}</div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary btn-sm" onclick="deleteStripeCard('${card.id}')" style="color: var(--color-danger); border-color: var(--color-danger);">Supprimer</button>
+                            </div>`;
+            }).join('')}
                     </div>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="deletePaymentMethod()" style="color: var(--color-danger); border-color: var(--color-danger);">Supprimer</button>
-            </div>
-        `;
-        document.getElementById('addPaymentFormContainer').style.display = 'none';
-    } else {
-        container.innerHTML = `
-            <div class="empty-state small" style="padding: 30px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="margin: 0 auto 12px; color: var(--text-secondary); opacity: 0.5;">
-                    <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
-                    <line x1="2" y1="10" x2="22" y2="10"></line>
-                </svg>
-                <p>Aucun moyen de paiement enregistré.</p>
-            </div>
-        `;
-        document.getElementById('addPaymentFormContainer').style.display = 'block';
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <div class="empty-state small" style="padding: 20px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40" style="margin: 0 auto 12px; color: var(--text-secondary); opacity: 0.5;">
+                                <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="2" y1="10" x2="22" y2="10"></line>
+                            </svg>
+                            <p style="color: var(--text-secondary);">Aucun moyen de paiement enregistré.</p>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">Vos cartes seront automatiquement sauvegardées lors de votre premier achat ou abonnement.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (err) {
+        container.innerHTML = '<p style="color: var(--color-danger); padding: 10px;">Erreur lors du chargement des moyens de paiement.</p>';
     }
+}
+
+async function deleteStripeCard(pmId) {
+    showConfirmModal('Supprimer la carte', 'Êtes-vous sûr de vouloir supprimer ce moyen de paiement ?', async () => {
+        try {
+            const res = await apiDelete(`/api/billing/stripe-payment-methods/${pmId}`);
+            if (res.success) {
+                showToast(res.message || 'Carte supprimée.', 'success');
+                loadPaymentMethods();
+            } else {
+                showToast(res.error || 'Erreur', 'error');
+            }
+        } catch (err) {
+            showToast('Erreur réseau', 'error');
+        }
+    }, 'Supprimer', true);
 }
 
 // ============ API HELPERS ============

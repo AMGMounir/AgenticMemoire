@@ -39,8 +39,8 @@ class UserStore {
             deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
 
             insertTransaction: db.prepare(`
-                INSERT INTO transactions (id, user_id, type, amount, credits_changed, description, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO transactions (id, user_id, type, amount, credits_changed, description, receipt_url, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `),
             getTransactions: db.prepare('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC')
         };
@@ -172,10 +172,10 @@ class UserStore {
         if (result.changes === 0) throw new Error('User not found');
     }
 
-    addTransaction(userId, type, amount, creditsChanged, description) {
+    addTransaction(userId, type, amount, creditsChanged, description, receiptUrl = null) {
         const id = uuidv4();
         const now = new Date().toISOString();
-        this._stmts.insertTransaction.run(id, userId, type, amount, creditsChanged, description, now);
+        this._stmts.insertTransaction.run(id, userId, type, amount, creditsChanged, description, receiptUrl, now);
         return id;
     }
 

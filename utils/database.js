@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount REAL NOT NULL,
     credits_changed INTEGER NOT NULL,
     description TEXT NOT NULL,
+    receipt_url TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
@@ -115,6 +116,13 @@ try {
     const hasStripeCust = tableInfo.some(col => col.name === 'stripe_customer_id');
     if (!hasStripeCust) {
         db.exec("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
+    }
+
+    // Transaction table migration
+    const txInfo = db.pragma('table_info(transactions)');
+    const hasReceiptUrl = txInfo.some(col => col.name === 'receipt_url');
+    if (!hasReceiptUrl) {
+        db.exec("ALTER TABLE transactions ADD COLUMN receipt_url TEXT");
     }
 } catch (e) {
     console.warn("Migration warning:", e.message);
