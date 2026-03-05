@@ -21,6 +21,7 @@ class SourceStore {
             updateMindmap: db.prepare('UPDATE projects SET mindmap_data = ? WHERE id = ?'),
             updateMemoir: db.prepare('UPDATE projects SET memoir_data = ? WHERE id = ?'),
             deleteProject: db.prepare('DELETE FROM projects WHERE id = ?'),
+            clearMemoirData: db.prepare('UPDATE projects SET memoir_data = NULL WHERE id = ?'),
 
             // Sources
             getByProject: db.prepare('SELECT * FROM sources WHERE project_id = ? ORDER BY added_at DESC'),
@@ -98,6 +99,10 @@ class SourceStore {
     removeProject(projectId) {
         // Cascades to sources automatically due to Foreign Key ON DELETE CASCADE
         this._stmts.deleteProject.run(projectId);
+    }
+
+    clearMemoirData(projectId) {
+        this._stmts.clearMemoirData.run(projectId);
     }
 
     clearProject(projectId) {

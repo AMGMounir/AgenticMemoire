@@ -336,6 +336,34 @@ app.delete('/api/projects/:id', (req, res) => {
     }
 });
 
+// Delete only the sources of a project (keep the project and memoir)
+app.delete('/api/projects/:id/sources', (req, res) => {
+    try {
+        sourceStore.clearProject(req.params.id);
+        const proj = sourceStore.getProject(req.params.id);
+        if (proj && !proj.memoirData && proj.sourceCount === 0) {
+            sourceStore.removeProject(req.params.id);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete only the memoir data of a project (keep the project and sources)
+app.delete('/api/projects/:id/memoir', (req, res) => {
+    try {
+        sourceStore.clearMemoirData(req.params.id);
+        const proj = sourceStore.getProject(req.params.id);
+        if (proj && !proj.memoirData && proj.sourceCount === 0) {
+            sourceStore.removeProject(req.params.id);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============ AGENTS API — ITERATIVE ============
 
 app.get('/api/agents/status', (req, res) => {

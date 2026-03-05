@@ -397,9 +397,15 @@ function navigateTo(section) {
     if (activeSection) activeSection.classList.add('active');
 
     // Load data hooks
-    if (section === 'sources') loadSources();
+    if (section === 'sources') {
+        if (selectedProjectId) closeFolder();
+        loadProjects();
+    }
     if (section === 'agents') pollAgentStatus();
-    if (section === 'memoir') loadMemoirProjects();
+    if (section === 'memoir') {
+        if (selectedMemoirProjectId) closeMemoirFolder();
+        loadMemoirProjects();
+    }
     if (section === 'billing-overview') {
         // Just general update if needed
     }
@@ -968,28 +974,6 @@ function initMindmap() {
 
     document.getElementById('renderMindmap').addEventListener('click', renderMindmap);
 
-    document.getElementById('loadExample').addEventListener('click', () => {
-        document.getElementById('mindmapInput').value = `mindmap
-  root((Intelligence Artificielle et Éducation))
-    Applications pédagogiques
-      Tuteurs intelligents
-      Apprentissage adaptatif
-      Évaluation automatisée
-    Technologies sous-jacentes
-      Machine Learning
-      Traitement du langage naturel
-      Systèmes de recommandation
-    Enjeux éthiques
-      Biais algorithmiques
-      Protection des données
-      Accessibilité
-    Perspectives
-      Personnalisation
-      Gamification
-      Métavers éducatif`;
-        renderMindmap();
-    });
-
     // Launch RESEARCH (not all agents)
     document.getElementById('launchResearch').addEventListener('click', launchResearch);
 
@@ -1254,7 +1238,8 @@ async function loadProjects() {
     try {
         const result = await apiGet('/api/projects');
         if (!result.success) return;
-        const projects = result.data || [];
+        // Only show projects that have at least one source
+        const projects = (result.data || []).filter(p => p.sourceCount > 0);
         const container = document.getElementById('projectFoldersGrid');
 
         if (projects.length === 0) {
@@ -1332,9 +1317,9 @@ function closeFolder() {
 }
 
 async function deleteProject(projectId) {
-    showConfirmModal('Supprimer le projet', 'Voulez-vous vraiment supprimer ce projet et toutes ses sources ?', async () => {
+    showConfirmModal('Supprimer les sources', 'Voulez-vous vraiment supprimer toutes les sources de ce projet ? Le mémoire structuré sera conservé.', async () => {
         try {
-            await apiDelete(`/api/projects/${projectId}`);
+            await apiDelete(`/api/projects/${projectId}/sources`);
             if (selectedProjectId === projectId) closeFolder();
             loadProjects();
         } catch (err) {
@@ -1580,7 +1565,12 @@ function updatePipelineUI(status) {
         } else if (config.donePhases.includes(status.phase)) {
             el.classList.add('completed');
             badge.classList.add('done');
-            badge.textContent = 'Terminé';
+            // Structure done: hide badge (Afficher icon replaces it)
+            if (id === 'pipeline-structure' && status.phase === 'done') {
+                badge.style.display = 'none';
+            } else {
+                badge.textContent = 'Terminé';
+            }
             if (stopBtn) stopBtn.style.display = 'none';
         } else if (status.phase === 'error') {
             badge.classList.add('error');
@@ -1592,10 +1582,8 @@ function updatePipelineUI(status) {
             if (stopBtn) stopBtn.style.display = 'none';
         }
 
-        // Orange magnifying glass on Synthesis step when research is done (waiting for user to launch synthesis)
+        // Orange 'Vérifier' on Synthesis step when research is done
         if (id === 'pipeline-synthesis' && status.phase === 'research_done') {
-            badge.textContent = '';
-            badge.className = 'status-badge';
             const actionBtn = document.createElement('span');
             actionBtn.className = 'pipeline-action-icon';
             actionBtn.innerHTML = `Vérifier ${magnifyingSvg}`;
@@ -1613,13 +1601,14 @@ function updatePipelineUI(status) {
             badge.after(actionBtn);
         }
 
-        // Green magnifying glass on Structure step when project is fully done
+        // Green 'Afficher' on Structure step when project is fully done
         if (id === 'pipeline-structure' && status.phase === 'done') {
+            badge.style.display = 'none';
             const actionBtn = document.createElement('span');
             actionBtn.className = 'pipeline-action-icon';
-            actionBtn.innerHTML = `Vérifier ${magnifyingSvg}`;
+            actionBtn.innerHTML = `Afficher ${magnifyingSvg}`;
             actionBtn.title = 'Voir le mémoire structuré';
-            actionBtn.style.cssText = 'cursor:pointer; color:var(--color-success); display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; background:var(--color-success-bg); transition:all 0.2s; font-size:0.85rem; font-weight:600; margin-left:8px;';
+            actionBtn.style.cssText = 'cursor:pointer; color:var(--color-success); display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; background:var(--color-success-bg); transition:all 0.2s; font-size:0.85rem; font-weight:600;';
             actionBtn.addEventListener('mouseenter', () => { actionBtn.style.background = 'rgba(106,191,123,0.25)'; });
             actionBtn.addEventListener('mouseleave', () => { actionBtn.style.background = 'var(--color-success-bg)'; });
             actionBtn.addEventListener('click', (e) => {
@@ -1660,7 +1649,8 @@ async function loadMemoirProjects() {
     try {
         const result = await apiGet('/api/projects');
         if (!result.success) return;
-        const projects = result.data || [];
+        // Only show projects that actually have a memoir generated
+        const projects = (result.data || []).filter(p => p.memoirData);
         const container = document.getElementById('memoirFoldersGrid');
 
         if (projects.length === 0) {
@@ -1683,8 +1673,8 @@ async function loadMemoirProjects() {
                     </svg>
                 </div>
                 <div class="folder-title">${escapeHtml(p.title)}</div>
-                <div class="folder-count">${p.hasMemoir ? '✅ Mémoire disponible' : `${p.sourceCount} source${p.sourceCount !== 1 ? 's' : ''}`}</div>
-                <button class="folder-delete-btn" data-delete-memoir-project="${p.id}" title="Supprimer le projet">
+                <div class="folder-count">✅ Mémoire disponible</div>
+                <button class="folder-delete-btn" data-delete-memoir-project="${p.id}" title="Supprimer le mémoire">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -1699,9 +1689,10 @@ async function loadMemoirProjects() {
 }
 
 async function deleteMemoirProject(projectId) {
-    showConfirmModal('Supprimer le projet', 'Êtes-vous sûr de vouloir supprimer ce projet et tout son contenu (sources, mémoire, etc.) ?', async () => {
+    showConfirmModal('Supprimer le mémoire', 'Êtes-vous sûr de vouloir supprimer ce mémoire ? Les sources initiales seront conservées.', async () => {
         try {
-            await apiDelete(`/api/projects/${projectId}`);
+            await apiDelete(`/api/projects/${projectId}/memoir`);
+            if (selectedMemoirProjectId === projectId) closeMemoirFolder();
             loadMemoirProjects();
             loadProjects();
         } catch (err) {
