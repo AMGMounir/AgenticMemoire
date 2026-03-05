@@ -17,7 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 
-<body>
+<body style="opacity: 0; transition: opacity 0.15s ease;">
   <!-- Sidebar Navigation -->
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-brand">
@@ -92,6 +92,11 @@
           </svg>
         </a>
         <ul class="nav-sublist" id="billingSublist">
+          <li>
+            <a href="#" class="nav-link sub-link" data-section="billing-consommation" id="nav-billing-consommation">
+              <span>Consommation</span>
+            </a>
+          </li>
           <li>
             <a href="#" class="nav-link sub-link" data-section="billing-facturation" id="nav-billing-facturation">
               <span>Facturation</span>
@@ -607,11 +612,45 @@
       </div>
     </section>
 
-    <!-- BILLING SECTION: FACTURATION (Historique) -->
+    <!-- BILLING SECTION: CONSOMMATION -->
+    <section class="content-section" id="section-billing-consommation">
+      <div class="section-header">
+        <h1>Consommation</h1>
+        <p class="section-subtitle">Historique de vos crédits consommés et les tâches associées.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Historique de consommation</h2>
+        </div>
+        <div class="card-body">
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                  <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Date</th>
+                  <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Tâche</th>
+                  <th style="padding: 12px; font-weight: 500; color: var(--text-secondary); text-align: center;">Crédits
+                    utilisés</th>
+                </tr>
+              </thead>
+              <tbody id="consumptionHistoryBody">
+                <tr>
+                  <td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BILLING SECTION: FACTURATION (Achats & Abonnements) -->
     <section class="content-section" id="section-billing-facturation">
       <div class="section-header">
         <h1>Facturation</h1>
-        <p class="section-subtitle">Visualisez l'historique de vos requêtes, achats et téléchargez vos factures.</p>
+        <p class="section-subtitle">Historique de vos achats de crédits et abonnements. Téléchargez vos factures.</p>
       </div>
 
       <!-- Transaction History Table -->

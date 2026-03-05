@@ -215,12 +215,26 @@ body {
 }
 
 .nav-group .chevron {
-  transition: transform var(--transition-fast);
+  transition: transform var(--transition-fast), background var(--transition-fast);
   margin-left: auto;
-  opacity: 0.5;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.nav-group.active>.nav-link .chevron {
+.nav-group .chevron:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.nav-group.active>.nav-link .chevron,
+.nav-group.active>.nav-group-toggle .chevron {
   transform: rotate(180deg);
 }
 

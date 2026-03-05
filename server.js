@@ -732,7 +732,7 @@ app.post('/api/billing/confirm-credits', async (req, res) => {
             }
 
             userStore.addCredits(req.session.userId, credits);
-            userStore.addTransaction(req.session.userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`, receiptUrl);
+            userStore.addTransaction(req.session.userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits`, receiptUrl);
 
             return res.json({ success: true, data: userStore.sanitize(userStore.findById(req.session.userId)) });
         } else {
@@ -929,7 +929,7 @@ app.post('/api/webhooks/stripe', async (req, res) => {
                 }
 
                 userStore.addCredits(userId, credits);
-                userStore.addTransaction(userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits par Stripe`, receiptUrl);
+                userStore.addTransaction(userId, 'purchase', amountInDollars, credits, `Achat de ${credits} crédits`, receiptUrl);
             }
         } else if (event.type === 'invoice.payment_succeeded') {
             const invoice = event.data.object;

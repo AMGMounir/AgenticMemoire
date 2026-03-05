@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Reveal body now that auth is confirmed
+    document.body.style.opacity = '1';
+
     // Load user profile into sidebar
     loadUserProfile(currentUser);
     initUserDropdown();
@@ -400,6 +403,7 @@ function navigateTo(section) {
     if (section === 'billing-overview') {
         // Just general update if needed
     }
+    if (section === 'billing-consommation') loadConsumptionHistory();
     if (section === 'billing-facturation') loadTransactionHistory();
     if (section === 'billing-paiement') loadPaymentMethods();
 }
@@ -687,46 +691,149 @@ async function buyCredits(packageId) {
     openPaymentModal('credits', { packageId });
 }
 
-async function loadTransactionHistory() {
+let _facturePage = 0;
+let _factureData = [];
+let _consoPage = 0;
+let _consoData = [];
+const PAGE_SIZE = 10;
+
+function renderPagination(containerId, currentPage, totalItems, onPageChange) {
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    if (totalPages <= 1) return '';
+    const prev = currentPage > 0
+        ? `<button class="btn btn-secondary btn-sm" onclick="${onPageChange}(${currentPage - 1})">&laquo; Précédent</button>`
+        : `<button class="btn btn-secondary btn-sm" disabled style="opacity:0.4;">&laquo; Précédent</button>`;
+    const next = currentPage < totalPages - 1
+        ? `<button class="btn btn-secondary btn-sm" onclick="${onPageChange}(${currentPage + 1})">Suivant &raquo;</button>`
+        : `<button class="btn btn-secondary btn-sm" disabled style="opacity:0.4;">Suivant &raquo;</button>`;
+    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:12px 12px 4px;">
+        ${prev}
+        <span style="color:var(--text-secondary); font-size:0.85rem;">Page ${currentPage + 1} / ${totalPages}</span>
+        ${next}
+    </div>`;
+}
+
+async function loadTransactionHistory(page) {
     const tbody = document.getElementById('billingHistoryBody');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement...</td></tr>';
+    if (page === undefined) {
+        // Fresh load
+        _facturePage = 0;
+        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement...</td></tr>';
 
-    try {
-        const res = await apiGet('/api/billing/history');
-
-        if (res.success) {
-            if (res.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--text-secondary);">Aucune transaction trouvée.</td></tr>';
-                return;
+        try {
+            const res = await apiGet('/api/billing/history');
+            if (res.success) {
+                _factureData = res.data.filter(t => t.amount > 0);
+            } else {
+                _factureData = [];
             }
-
-            tbody.innerHTML = res.data.map(t => {
-                const date = new Date(t.created_at).toLocaleDateString('fr-FR', {
-                    day: '2-digit', month: 'short', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                });
-                const amountText = t.amount > 0 ? `${t.amount.toFixed(2)}$` : '—';
-                const creditColor = t.credits_changed > 0 ? 'var(--color-success)' : (t.credits_changed < 0 ? 'var(--color-danger)' : 'var(--text-secondary)');
-                const creditPrefix = t.credits_changed > 0 ? '+' : '';
-                const receiptButton = t.receipt_url
-                    ? `<a href="${t.receipt_url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">PDF</a>`
-                    : (t.amount > 0 ? `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5; cursor: not-allowed;">PDF</button>` : '—');
-
-                return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
-                    <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
-                    <td style="padding: 12px; color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(t.description)}</td>
-                    <td style="padding: 12px; color: var(--text-secondary); font-size: 0.95rem;">${amountText}</td>
-                    <td style="padding: 12px; color: ${creditColor}; font-weight: 600; font-size: 0.95rem;">${creditPrefix}${t.credits_changed}</td>
-                    <td style="padding: 12px; text-align: right;">${receiptButton}</td>
-                </tr>`;
-            }).join('');
-        } else {
-            tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--color-danger);">Erreur du chargement.</td></tr>';
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--color-error);">Erreur réseau.</td></tr>';
+            return;
         }
-    } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--color-danger);">Erreur réseau.</td></tr>';
+    } else {
+        _facturePage = page;
+    }
+
+    if (_factureData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: var(--text-secondary);">Aucune facture trouvée.</td></tr>';
+        return;
+    }
+
+    const start = _facturePage * PAGE_SIZE;
+    const slice = _factureData.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = slice.map(t => {
+        const date = new Date(t.created_at).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+        const amountText = `${t.amount.toFixed(2)}$`;
+        const creditColor = t.credits_changed > 0 ? 'var(--color-success)' : 'var(--text-secondary)';
+        const creditPrefix = t.credits_changed > 0 ? '+' : '';
+        const receiptButton = t.receipt_url
+            ? `<a href="${t.receipt_url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">PDF</a>`
+            : `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.5; cursor: not-allowed;">PDF</button>`;
+
+        return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
+            <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
+            <td style="padding: 12px; color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(t.description)}</td>
+            <td style="padding: 12px; color: var(--text-secondary); font-size: 0.95rem;">${amountText}</td>
+            <td style="padding: 12px; color: ${creditColor}; font-weight: 600; font-size: 0.95rem;">${creditPrefix}${t.credits_changed}</td>
+            <td style="padding: 12px; text-align: right;">${receiptButton}</td>
+        </tr>`;
+    }).join('');
+
+    // Pagination controls
+    const paginationContainer = tbody.closest('.card-body') || tbody.parentElement;
+    let pagEl = paginationContainer.querySelector('.pagination-controls');
+    if (pagEl) pagEl.remove();
+    const totalPages = Math.ceil(_factureData.length / PAGE_SIZE);
+    if (totalPages > 1) {
+        const div = document.createElement('div');
+        div.className = 'pagination-controls';
+        div.innerHTML = renderPagination('facturation', _facturePage, _factureData.length, 'loadTransactionHistory');
+        paginationContainer.appendChild(div);
+    }
+}
+
+async function loadConsumptionHistory(page) {
+    const tbody = document.getElementById('consumptionHistoryBody');
+    if (!tbody) return;
+
+    if (page === undefined) {
+        // Fresh load
+        _consoPage = 0;
+        tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Chargement...</td></tr>';
+
+        try {
+            const res = await apiGet('/api/billing/history');
+            if (res.success) {
+                _consoData = res.data.filter(t => t.credits_changed < 0);
+            } else {
+                _consoData = [];
+            }
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--color-error);">Erreur réseau.</td></tr>';
+            return;
+        }
+    } else {
+        _consoPage = page;
+    }
+
+    if (_consoData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-secondary);">Aucune consommation trouvée.</td></tr>';
+        return;
+    }
+
+    const start = _consoPage * PAGE_SIZE;
+    const slice = _consoData.slice(start, start + PAGE_SIZE);
+
+    tbody.innerHTML = slice.map(t => {
+        const date = new Date(t.created_at).toLocaleDateString('fr-FR', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        return `<tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-primary);">
+            <td style="padding: 12px; color: var(--text-secondary); font-size: 0.9rem;">${date}</td>
+            <td style="padding: 12px; color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(t.description)}</td>
+            <td style="padding: 12px; text-align: center; color: var(--color-error); font-weight: 600; font-size: 0.95rem;">${t.credits_changed}</td>
+        </tr>`;
+    }).join('');
+
+    // Pagination controls
+    const paginationContainer = tbody.closest('.card-body') || tbody.parentElement;
+    let pagEl = paginationContainer.querySelector('.pagination-controls');
+    if (pagEl) pagEl.remove();
+    const totalPages = Math.ceil(_consoData.length / PAGE_SIZE);
+    if (totalPages > 1) {
+        const div = document.createElement('div');
+        div.className = 'pagination-controls';
+        div.innerHTML = renderPagination('consommation', _consoPage, _consoData.length, 'loadConsumptionHistory');
+        paginationContainer.appendChild(div);
     }
 }
 
@@ -760,7 +867,7 @@ async function loadPaymentMethods() {
                                         <div style="font-size: 0.8rem; color: var(--text-secondary);">Expire ${String(card.exp_month).padStart(2, '0')}/${card.exp_year}</div>
                                     </div>
                                 </div>
-                                <button class="btn btn-secondary btn-sm" onclick="deleteStripeCard('${card.id}')" style="color: var(--color-danger); border-color: var(--color-danger);">Supprimer</button>
+                                <button class="btn btn-secondary btn-sm" onclick="deleteStripeCard('${card.id}')" style="color: var(--color-error); border-color: var(--color-error);">Supprimer</button>
                             </div>`;
             }).join('')}
                     </div>
@@ -783,7 +890,7 @@ async function loadPaymentMethods() {
             `;
         }
     } catch (err) {
-        container.innerHTML = '<p style="color: var(--color-danger); padding: 10px;">Erreur lors du chargement des moyens de paiement.</p>';
+        container.innerHTML = '<p style="color: var(--color-error); padding: 10px;">Erreur lors du chargement des moyens de paiement.</p>';
     }
 }
 
