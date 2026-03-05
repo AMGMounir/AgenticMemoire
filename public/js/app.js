@@ -1552,6 +1552,8 @@ function getStatusLabel(phase) {
 }
 
 function updatePipelineUI(status) {
+    const magnifyingSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+
     const steps = {
         'pipeline-research': { phases: ['research'], donePhases: ['research_done', 'synthesis', 'structure', 'done'] },
         'pipeline-synthesis': { phases: ['synthesis'], donePhases: ['structure', 'done'] },
@@ -1565,6 +1567,10 @@ function updatePipelineUI(status) {
 
         el.classList.remove('active', 'completed', 'error');
         badge.className = 'status-badge';
+
+        // Remove any previous action icon
+        const oldAction = el.querySelector('.pipeline-action-icon');
+        if (oldAction) oldAction.remove();
 
         if (config.phases.includes(status.phase)) {
             el.classList.add('active');
@@ -1585,6 +1591,46 @@ function updatePipelineUI(status) {
             badge.textContent = 'En attente';
             if (stopBtn) stopBtn.style.display = 'none';
         }
+
+        // Orange magnifying glass on Synthesis step when research is done (waiting for user to launch synthesis)
+        if (id === 'pipeline-synthesis' && status.phase === 'research_done') {
+            badge.textContent = '';
+            badge.className = 'status-badge';
+            const actionBtn = document.createElement('span');
+            actionBtn.className = 'pipeline-action-icon';
+            actionBtn.innerHTML = `Vérifier ${magnifyingSvg}`;
+            actionBtn.title = 'Voir les sources et lancer la synthèse';
+            actionBtn.style.cssText = 'cursor:pointer; color:var(--accent-primary); display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; background:var(--accent-primary-bg); transition:all 0.2s; font-size:0.85rem; font-weight:600;';
+            actionBtn.addEventListener('mouseenter', () => { actionBtn.style.background = 'rgba(212,160,83,0.25)'; });
+            actionBtn.addEventListener('mouseleave', () => { actionBtn.style.background = 'var(--accent-primary-bg)'; });
+            actionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigateTo('sources');
+                if (status.projectId) {
+                    setTimeout(() => openFolder(status.projectId, status.projectTitle || status.projectId), 100);
+                }
+            });
+            badge.after(actionBtn);
+        }
+
+        // Green magnifying glass on Structure step when project is fully done
+        if (id === 'pipeline-structure' && status.phase === 'done') {
+            const actionBtn = document.createElement('span');
+            actionBtn.className = 'pipeline-action-icon';
+            actionBtn.innerHTML = `Vérifier ${magnifyingSvg}`;
+            actionBtn.title = 'Voir le mémoire structuré';
+            actionBtn.style.cssText = 'cursor:pointer; color:var(--color-success); display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; background:var(--color-success-bg); transition:all 0.2s; font-size:0.85rem; font-weight:600; margin-left:8px;';
+            actionBtn.addEventListener('mouseenter', () => { actionBtn.style.background = 'rgba(106,191,123,0.25)'; });
+            actionBtn.addEventListener('mouseleave', () => { actionBtn.style.background = 'var(--color-success-bg)'; });
+            actionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigateTo('memoir');
+                if (status.projectId) {
+                    setTimeout(() => openMemoirFolder(status.projectId, status.projectTitle || status.projectId), 100);
+                }
+            });
+            badge.after(actionBtn);
+        }
     }
 }
 
@@ -1594,6 +1640,13 @@ let selectedMemoirProjectId = null;
 function initMemoir() {
     // Event delegation for memoir folder clicks
     document.getElementById('memoirFoldersGrid').addEventListener('click', (e) => {
+        // Delete memoir project button
+        const delBtn = e.target.closest('[data-delete-memoir-project]');
+        if (delBtn) {
+            e.stopPropagation();
+            deleteMemoirProject(delBtn.dataset.deleteMemoirProject);
+            return;
+        }
         const card = e.target.closest('[data-memoir-folder-id]');
         if (card) {
             openMemoirFolder(card.dataset.memoirFolderId, card.dataset.memoirFolderTitle);
@@ -1631,12 +1684,30 @@ async function loadMemoirProjects() {
                 </div>
                 <div class="folder-title">${escapeHtml(p.title)}</div>
                 <div class="folder-count">${p.hasMemoir ? '✅ Mémoire disponible' : `${p.sourceCount} source${p.sourceCount !== 1 ? 's' : ''}`}</div>
+                <button class="folder-delete-btn" data-delete-memoir-project="${p.id}" title="Supprimer le projet">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                </button>
             </div>
         `).join('');
 
     } catch (err) {
         console.error('Error loading memoir projects:', err);
     }
+}
+
+async function deleteMemoirProject(projectId) {
+    showConfirmModal('Supprimer le projet', 'Êtes-vous sûr de vouloir supprimer ce projet et tout son contenu (sources, mémoire, etc.) ?', async () => {
+        try {
+            await apiDelete(`/api/projects/${projectId}`);
+            loadMemoirProjects();
+            loadProjects();
+        } catch (err) {
+            showToast('Erreur: ' + err.message, 'error');
+        }
+    });
 }
 
 function openMemoirFolder(projectId, projectTitle) {
