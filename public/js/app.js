@@ -2354,46 +2354,22 @@ async function downloadMemoir(structure, synthesis) {
 
     html += '</div>';
 
-    // Open in new window for print-to-PDF (100% reliable)
-    const fullHtml = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Mémoire — ${escapeHtml(structure.title || 'Export')}</title>
-<style>
-  @media print {
-    body { margin: 0; }
-    @page { margin: 15mm; size: A4; }
-    .no-print { display: none !important; }
-  }
-  body { background: #fff; margin: 0; padding: 0; }
-</style>
-</head>
-<body>
-<div class="no-print" style="background:#8b7355;color:#fff;padding:12px 24px;font-family:sans-serif;display:flex;align-items:center;justify-content:space-between;">
-  <span>📄 Aperçu du mémoire — Utilisez <b>Ctrl+P</b> → <b>Enregistrer en PDF</b></span>
-  <button onclick="window.print()" style="background:#fff;color:#8b7355;border:none;padding:8px 20px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;">Imprimer / PDF</button>
-</div>
-${html}
-</body>
-</html>`;
+    // Generate PDF using html2pdf directly from the HTML string
+    showToast('Génération du PDF en cours...', 'info');
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-        printWindow.document.write(fullHtml);
-        printWindow.document.close();
-        // Auto-trigger print after content loads
-        printWindow.onload = () => {
-            setTimeout(() => printWindow.print(), 500);
-        };
-    } else {
-        // Popup blocked — fallback: download as HTML file
-        const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `memoire_${new Date().toISOString().slice(0, 10)}.html`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
+    const opt = {
+        margin: 15,
+        filename: `memoire_${new Date().toISOString().slice(0, 10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: 'css', before: '#page-break' }
+    };
+
+    html2pdf().set(opt).from(html).save().then(() => {
+        showToast('PDF téléchargé avec succès !', 'success');
+    }).catch(err => {
+        console.error('PDF generation error:', err);
+        showToast('Erreur lors de la génération du PDF', 'error');
+    });
 }
