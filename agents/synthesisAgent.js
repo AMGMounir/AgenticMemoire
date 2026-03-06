@@ -222,7 +222,7 @@ class SynthesisAgent {
             temperature: 0.25,
             timeout: 120000,
             messages: [
-                { role: 'system', content: 'Tu es un chercheur doctoral produisant un état de l\'art de 800+ mots par thème. Tu écris en français académique soutenu avec des citations [Source X]. Réponds en JSON.' },
+                { role: 'system', content: 'Tu es un étudiant de Master 2 brillant et rigoureux. Tu dois rédiger ton mémoire (état de l\'art) de manière académique mais TRÈS HUMAINE (800+ mots). Le texte doit être fluide, avec de vraies transitions et un cheminement de pensée logique. Réponds en JSON.' },
                 {
                     role: 'user', content: `ANALYSE APPROFONDIE pour un mémoire doctoral.
 
@@ -232,10 +232,10 @@ ${subTopics ? `SOUS-THÈMES: ${subTopics}` : ''}
 CORPUS (${sourceContext.split('---').length} sources):
 ${sourceContext}
 
-Tu dois produire une analyse académique DE HAUTE QUALITÉ. Pas de résumé superficiel.
+Tu dois produire le corps de ton mémoire. Évite à tout prix le style "robotique" ou le simple catalogue de sources.
 
 EXIGENCES STRICTES:
-1. SYNTHÈSE (800+ mots MINIMUM): Rédige un texte académique fluide structuré en sous-parties. Cite systématiquement les sources [Source X]. Analyse les convergences, divergences, évolutions historiques. Discute les cadres théoriques. Évalue les méthodologies. Identifie les paradigmes dominants et émergents.
+1. SYNTHÈSE (800+ mots MINIMUM): Rédige un texte argumenté, humain et captivant. Montre comment les idées évoluent. Utilise de vrais mots de liaison (Cependant, En outre, C\'est pourquoi...). Cite les sources naturellement au sein de ton récit [Source X]. Ne fais PAS de liste de faits déconnectés. Assume le ton d\'un étudiant qui démontre sa thèse.
 
 2. POINTS CLÉS (8-12 items): Chaque point doit être une phrase complète avec sa source.
 
@@ -272,7 +272,7 @@ JSON:
             temperature: 0.25,
             timeout: 120000,
             messages: [
-                { role: 'system', content: 'Tu es un rédacteur académique de niveau doctoral. Tu produis des textes denses, analytiques et riches en citations. Écris en français académique soutenu. Réponds en JSON.' },
+                { role: 'system', content: 'Tu es un rédacteur académique très talentueux (niveau Master). Tu produis des textes denses, mais avec un "fil conducteur" humain et des transitions fluides. Ce n\'est pas une suite de faits, c\'est un plaidoyer intellectuel. Réponds en JSON.' },
                 {
                     role: 'user', content: `EXPANSION ACADÉMIQUE APPROFONDIE.
 
@@ -287,18 +287,16 @@ ${(themeAnalysis.criticalAnalysis || '').substring(0, 1000)}
 SOURCES DISPONIBLES:
 ${sourceContext.substring(0, 4000)}
 
-MISSION: Produis du contenu SUPPLÉMENTAIRE qui vient COMPLÉTER et APPROFONDIR la synthèse existante.
+MISSION: Rédige la suite de ton argumentation. Le défi est de rendre ça COHÉRENT et humain, comme si tu racontais l'évolution de ta recherche à un jury.
 
-EXIGENCES ABSOLUES (tu DOIS les respecter):
+EXIGENCES ABSOLUES:
 
-1. expandedSynthesis (1500+ mots MINIMUM): Rédige une analyse COMPLÉMENTAIRE qui couvre:
-   - L'ÉVOLUTION HISTORIQUE du sujet (origines, étapes clés, état actuel)
-   - Une CRITIQUE MÉTHODOLOGIQUE détaillée (forces et faiblesses des approches utilisées dans les études)
-   - Les PREUVES EMPIRIQUES avec des chiffres, données, résultats d'études spécifiques [Source X]
-   - Les IMPLICATIONS THÉORIQUES et pratiques
-   - Les PERSPECTIVES FUTURES et défis à relever
-   - Les CONTROVERSES et débats académiques dans le domaine
-   Utilise des paragraphes structurés avec sous-titres. Cite SYSTÉMATIQUEMENT les sources [Source X].
+1. expandedSynthesis (1500+ mots MINIMUM): Écris un récit analytique très poussé qui aborde de manière fluide:
+   - L'histoire et l'évolution des concepts
+   - Une critique intelligente des méthodes
+   - Des preuves empiriques amenées de manière naturelle [Source X]
+   - Les débats et controverses, en expliquant *pourquoi* les auteurs sont en désaccord
+   Fais des liens logiques entre les paragraphes. On doit lire un "vrai texte" pensé par un humain.
 
 2. additionalAnalysis (400+ mots): Analyse critique supplémentaire:
    - Validité des méthodologies employées
@@ -379,18 +377,17 @@ JSON:
             temperature: 0.3,
             timeout: 60000,
             messages: [
-                { role: 'system', content: 'Synthèse comparative inter-thèmes pour mémoire doctoral. Réponds en JSON.' },
+                { role: 'system', content: 'Tu rédiges une transition maîtresse pour ton mémoire. Tu fais des ponts intelligents et naturels entre les chapitres. Réponds en JSON.' },
                 {
                     role: 'user', content: `SUJET: "${mainTopic}"
 
 ANALYSES THÉMATIQUES:
 ${themeSummaries}
 
-Produis une SYNTHÈSE COMPARATIVE INTER-THÈMES (400+ mots):
-1. Comment les thèmes s'articulent entre eux
-2. Les fils conducteurs transversaux
-3. Les tensions/contradictions entre thèmes
-4. Les synergies et complémentarités
+Produis une réflexion TRANSVERSALE très humaine (400+ mots):
+1. Comment ces thèmes racontent-ils une seule et même histoire ?
+2. Quels sont les paradoxes passionnants à soulever ?
+3. Le texte doit être continu, comme une belle conclusion partielle, sans énumération froide.
 
 JSON:
 {
@@ -416,19 +413,19 @@ JSON:
             temperature: 0.25,
             timeout: 90000,
             messages: [
-                { role: 'system', content: 'Tu es un directeur de thèse produisant une méta-analyse finale. Réponds en JSON.' },
+                { role: 'system', content: 'Tu es l\'auteur principal du mémoire. Tu rédiges ta conclusion générale. C\'est ton moment pour briller : sois clair, engageant, et montre ton cheminement intellectuel. Réponds en JSON.' },
                 {
                     role: 'user', content: `SUJET: "${mainTopic}" | ${sourceCount} sources analysées
 
 SYNTHÈSES THÉMATIQUES:
 ${themeSummaries}
 
-Produis une MÉTA-ANALYSE de niveau directeur de thèse:
+Produis ta CONCLUSION GLOBALE (Méta-analyse):
 
-1. RÉSUMÉ GLOBAL (400+ mots): Vision d'ensemble du champ, tendances, maturité du domaine, principaux debates
-2. LACUNES (5-8): Aspects manquants dans la littérature avec explications
-3. CONTRADICTIONS (3-5): Points de tension entre les sources/approches
-4. RECOMMANDATIONS (5-8): Directions de recherche concrètes
+1. RÉSUMÉ GLOBAL (400+ mots): Rédige-le comme la véritable conclusion de tout ton travail de Master. Prends du recul, donne ta vision, explique ce que l'on doit retenir, avec conviction et nuance.
+2. LACUNES (5-8): Ce que ta recherche n'a pas pu couvrir et pourquoi.
+3. CONTRADICTIONS (3-5): Les points où la science hésite encore.
+4. RECOMMANDATIONS (5-8): Ce que tu conseillerais concrètement.
 5. RECHERCHE FUTURE (200+ mots): Programme de recherche proposé
 6. RÉFLEXION ÉPISTÉMOLOGIQUE (150+ mots): Positionnement épistémologique et limites des approches
 

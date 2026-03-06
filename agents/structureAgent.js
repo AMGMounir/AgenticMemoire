@@ -39,7 +39,7 @@ class StructureAgent {
                 `[${i + 1}] ${s.title}${s.url ? ' — ' + s.url : ''}${s.academicAnalysis ? '\n    Analyse: ' + s.academicAnalysis.substring(0, 200) : ''}`
             ).join('\n');
 
-            const prompt = `Tu es un directeur de thèse exigeant supervisant un mémoire de Master 2 / début de doctorat.
+            const prompt = `Tu es un étudiant de Master 2 très rigoureux qui rédige le plan détaillé de son mémoire, guidé par une logique implacable et un véritable "fil conducteur".
 
 SUJET: ${mindmap.label}
 
@@ -49,15 +49,14 @@ ${synthesisText.substring(0, 15000)}
 BIBLIOGRAPHIE:
 ${bibliography.substring(0, 5000)}
 
-Propose une structure de mémoire COMPLÈTE et DÉTAILLÉE de niveau doctoral.
+Propose une structure de mémoire COMPLÈTE et DÉTAILLÉE. Le ton doit être académique mais humain, naturel, et surtout cohérent.
 
 EXIGENCES:
-- Chaque section doit avoir une description SUBSTANTIELLE (100+ mots) expliquant précisément ce qu'elle doit contenir, avec des références aux sources [Source X]
-- Les sous-sections doivent être détaillées avec leur contenu attendu
-- Inclure des sections méthodologiques rigoureuses
-- Proposer un fil conducteur logique entre les sections
-- La problématique doit être formulée comme une vraie question de recherche
-- Estimer le nombre de pages par section
+- Chaque section doit avoir une description SUBSTANTIELLE (100+ mots) rédigée comme de vrais paragraphes (pas une simple liste de mots-clés). Explique précisément ce qu'elle contiendra et son rôle dans la démonstration globale.
+- Les sous-sections doivent être détaillées et s'enchaîner logiquement (il faut qu'on sente un vrai cheminement de pensée).
+- Intègre tes sources de façon fluide et naturelle [Source X] au fil de ton argumentation, sans que ça ne ressemble à un catalogue.
+- La problématique doit être formulée comme une vraie question de recherche humaine et motivée.
+- Estimer le nombre de pages par section.
 
 Réponds en JSON:
 {
@@ -92,7 +91,7 @@ Réponds en JSON:
                 temperature: 0.3,
                 timeout: 90000,
                 messages: [
-                    { role: 'system', content: 'Tu es un directeur de thèse expert en structuration académique. Tu produis des plans de mémoire rigoureux et détaillés. Réponds en JSON valide.' },
+                    { role: 'system', content: 'Tu es un expert en rédaction académique. Tu conçois des plans de mémoire fluides, logiques et rédigés de manière très humaine, comme le ferait un brillant étudiant. Réponds en JSON valide.' },
                     { role: 'user', content: prompt }
                 ]
             });
